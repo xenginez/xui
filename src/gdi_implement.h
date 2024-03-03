@@ -2,19 +2,19 @@
 
 #include "xui.h"
 
-class win_context : public xui::draw_context
+class gdi_implement : public xui::implement
 {
 private:
 	struct private_p;
 
 public:
-	win_context( std::pmr::memory_resource * res = std::pmr::get_default_resource() );
-	~win_context();
+	gdi_implement();
+	~gdi_implement();
 
 public:
-	void init() override;
-	void update( const std::function<std::span<xui::drawcommand>()> & paint );
-	void release() override;
+	void init();
+	void update( const std::function<std::span<xui::drawcmd>()> & paint );
+	void release();
 
 public:
 	xui::window_id create_window( std::string_view title, xui::texture_id icon, const xui::rect & rect, xui::window_id parent = xui::invalid_id ) override;
@@ -29,7 +29,9 @@ public:
 	void remove_window( xui::window_id id ) override;
 
 public:
-	xui::font_id create_font( std::string_view filename ) override;
+	bool load_font_file( std::string_view filename ) override;
+	xui::font_id create_font( std::string_view family, int size, xui::font_flag flag ) override;
+	int font_hight( xui::font_id id ) const override;
 	void remove_font( xui::font_id id ) override;
 
 public:
@@ -37,9 +39,14 @@ public:
 	xui::size texture_size( xui::texture_id id ) const override;
 	void remove_texture( xui::texture_id id ) override;
 
+public:
+	void set_event( xui::window_id id, xui::event key, int val );
+	int get_key( xui::window_id id, xui::event key ) const override;
+	xui::point get_cursor_pos( xui::window_id id ) const override;
+
 private:
 	void present();
-	void render( std::span<xui::drawcommand> cmds );
+	void render( std::span<xui::drawcmd> cmds );
 
 private:
 	private_p * _p;

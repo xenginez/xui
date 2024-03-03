@@ -169,12 +169,12 @@ namespace
     };
     static std::map<std::string_view, int> styles =
     {
-        { "none", xui::drawcommand::stroke::NONE },
-        { "solid", xui::drawcommand::stroke::SOLID },
-        { "dashed", xui::drawcommand::stroke::DASHED },
-        { "dotted", xui::drawcommand::stroke::DOTTED },
-        { "dashdot", xui::drawcommand::stroke::DASH_DOT },
-        { "dashdotdot", xui::drawcommand::stroke::DASH_DOT_DOT },
+        { "none", xui::drawcmd::stroke::NONE },
+        { "solid", xui::drawcmd::stroke::SOLID },
+        { "dashed", xui::drawcmd::stroke::DASHED },
+        { "dotted", xui::drawcmd::stroke::DOTTED },
+        { "dashdot", xui::drawcmd::stroke::DASH_DOT },
+        { "dashdotdot", xui::drawcmd::stroke::DASH_DOT_DOT },
     };
     static std::map<std::string_view, int> aligns =
     {
@@ -230,433 +230,6 @@ namespace
             return std::error_code( (int)code, category );
         }
     };
-
-    class xss
-    {
-    public:
-        struct url : public std::string
-        {
-        public:
-            std::string::basic_string;
-        };
-        struct variant : public std::variant<std::monostate, int, float, std::string, xui::color, xui::vec4, url>
-        {
-        public:
-            using std::variant<std::monostate, int, float, std::string, xui::color, xui::vec4, url>::variant;
-
-        public:
-            template<typename T> T value( const T & def = {} ) const
-            {
-                if ( index() == 0 )
-                    return def;
-
-                if constexpr ( std::is_enum_v<T> )
-                {
-                    return (T)std::get<int>( *this );
-                }
-                else if constexpr ( std::is_same_v<T, int> )
-                {
-                    if( index() == 2 )
-                        return (T)std::get<float>( *this );
-
-                    return std::get<T>( *this );
-                }
-                else if constexpr ( std::is_same_v<T, float> )
-                {
-                    if( index() == 3 )
-                        return (T)std::get<float>( *this );
-
-                    return std::get<T>( *this );
-                }
-                else if constexpr ( std::is_same_v<T, std::string> )
-                {
-                    if ( index() == 6 )
-                        return std::get<url>( *this );
-
-                    return std::get<T>( *this );
-                }
-                else
-                {
-                    return std::get<T>( *this );
-                }
-
-                return def;
-            }
-        };
-        struct selector
-        {
-            std::string name;
-            std::pmr::map<std::string, variant> attrs;
-        };
-
-    public:
-        xss( std::pmr::memory_resource * res )
-            : _selectors( res )
-        {
-
-        }
-
-    public:
-        void load( std::string_view str )
-        {
-            auto it = str.begin();
-
-            skip( it, str.end() );
-
-            while ( it != str.end() )
-            {
-                auto beg = it;
-                auto end = adv<'{'>( it, str.end() );
-
-                selector select;
-                select.name = { beg, end };
-
-                if ( check<'{'>( it, str.end() ) )
-                {
-                    while ( !check<'}'>( it, str.end() ) )
-                    {
-                        beg = it;
-                        end = adv<':'>( it, str.end() );
-
-                        std::string name( beg, end );
-
-                        check<':'>( it, str.end() );
-
-                        beg = it;
-                        end = adv<';'>( it, str.end() );
-
-                        std::string val( beg, end );
-
-                        if ( val.find( "#" ) == 0 )
-                        {
-                            xui::color col;
-
-                            auto beg = val.begin() + 1;
-                            auto end = beg + std::min<std::size_t>( 2, std::distance( beg, val.end() ) );
-
-                            if ( end != val.end() )
-                            {
-                                col.r = std::stoi( std::string( beg, end ), nullptr, 16 );
-                            }
-
-                            if ( end != val.end() )
-                            {
-                                beg = end;
-                                end = beg + std::min<std::size_t>( 2, std::distance( beg, val.end() ) );
-                                col.g = std::stoi( std::string( beg, end ), nullptr, 16 );
-                            }
-
-                            if ( end != val.end() )
-                            {
-                                beg = end;
-                                end = beg + std::min<std::size_t>( 2, std::distance( beg, val.end() ) );
-                                col.b = std::stoi( std::string( beg, end ), nullptr, 16 );
-                            }
-
-                            if ( end != val.end() )
-                            {
-                                beg = end;
-                                end = beg + std::min<std::size_t>( 2, std::distance( beg, val.end() ) );
-                                col.a = std::stoi( std::string( beg, end ), nullptr, 16 );
-                            }
-
-                            select.attrs.insert( { name, col } );
-                        }
-                        else if ( val.find( "url(" ) == 0 )
-                        {
-                            auto it = val.begin();
-                            auto beg = adv<'('>( it, val.end() ) + 1;
-                            auto end = adv<')'>( beg, val.end() );
-
-                            select.attrs.insert( { name, url( beg, end ) } );
-                        }
-                        else if ( val.find( "rgb(" ) == 0 )
-                        {
-                            xui::color col;
-
-                            auto it = val.begin();
-
-                            auto beg = adv<'('>( it, val.end() ) + 1;
-
-                            auto r_beg = beg;
-                            auto r_end = adv<','>( beg, val.end() );
-                            col.r = std::stoi( std::string( r_beg, r_end ) );
-
-                            auto g_beg = r_end + 1; beg = g_beg;
-                            auto g_end = adv<','>( beg, val.end() );
-                            col.g = std::stoi( std::string( g_beg, g_end ) );
-
-                            auto b_beg = g_end + 1; beg = b_beg;
-                            auto b_end = adv<')'>( beg, val.end() );
-                            col.b = std::stoi( std::string( b_beg, b_end ) );
-
-                            select.attrs.insert( { name, col } );
-                        }
-                        else if ( val.find( "rgba(" ) == 0 )
-                        {
-                            xui::color col;
-
-                            auto it = val.begin();
-
-                            auto beg = adv<'('>( it, val.end() ) + 1;
-
-                            auto r_beg = beg;
-                            auto r_end = adv<','>( beg, val.end() );
-                            col.r = std::stoi( std::string( r_beg, r_end ) );
-
-                            auto g_beg = r_end + 1; beg = g_beg;
-                            auto g_end = adv<','>( beg, val.end() );
-                            col.g = std::stoi( std::string( g_beg, g_end ) );
-
-                            auto b_beg = g_end + 1; beg = b_beg;
-                            auto b_end = adv<','>( beg, val.end() );
-                            col.b = std::stoi( std::string( b_beg, b_end ) );
-
-                            auto a_beg = b_end + 1; beg = a_beg;
-                            auto a_end = adv<')'>( beg, val.end() );
-                            col.a = std::stoi( std::string( a_beg, a_end ) );
-
-                            select.attrs.insert( { name, col } );
-                        }
-                        else if ( val.find( "vec4(" ) == 0 )
-                        {
-                            xui::vec4 vec;
-
-                            auto it = val.begin();
-
-                            auto beg = adv<'('>( it, val.end() ) + 1;
-
-                            auto r_beg = beg;
-                            auto r_end = adv<','>( beg, val.end() );
-                            vec.x = std::stoi( std::string( r_beg, r_end ) );
-
-                            auto g_beg = r_end + 1; beg = g_beg;
-                            auto g_end = adv<','>( beg, val.end() );
-                            vec.y = std::stoi( std::string( g_beg, g_end ) );
-
-                            auto b_beg = g_end + 1; beg = b_beg;
-                            auto b_end = adv<','>( beg, val.end() );
-                            vec.z = std::stoi( std::string( b_beg, b_end ) );
-
-                            auto a_beg = b_end + 1; beg = a_beg;
-                            auto a_end = adv<')'>( beg, val.end() );
-                            vec.w = std::stoi( std::string( a_beg, a_end ) );
-
-                            select.attrs.insert( { name, vec } );
-                        }
-                        else if ( colors.find( val ) != colors.end() )
-                        {
-                            select.attrs.insert( { name, xui::color( colors[val] ) } );
-                        }
-                        else if ( styles.find( val ) != styles.end() )
-                        {
-                            select.attrs.insert( { name, styles[val] } );
-                        }
-                        else if ( aligns.find( val ) != aligns.end() )
-                        {
-                            select.attrs.insert( { name, aligns[val] } );
-                        }
-                        else if ( std::regex_match(val, float_regex ) )
-                        {
-                            select.attrs.insert( { name, std::stof( val ) } );
-                        }
-                        else
-                        {
-                            select.attrs.insert( { name, val } );
-                        }
-
-                        check<';'>( it, str.end() );
-                    }
-                }
-
-                check<','>( it, str.end() );
-
-                _selectors.insert( { select.name, select } );
-            }
-
-            int i = 0;
-        }
-        xss::variant find( std::string_view name ) const
-        {
-            // {type}-{element}-{element}-{element}:{action}#{id}@{attr}
-            std::string_view type, action, id, attr;
-            std::pmr::vector<std::string_view> elements( _selectors.get_allocator().resource() );
-
-            // {attr}
-            if ( name.find( '@' ) != std::string_view::npos )
-            {
-                attr = { name.begin() + name.find( '@' ) + 1, name.end() };
-                name = { name.begin(), name.begin() + name.find( '@' ) };
-            }
-
-            // {id}
-            if ( name.find( '#' ) != std::string_view::npos )
-            {
-                id = { name.begin() + name.find( '#' ), name.end() };
-                name = { name.begin(), name.begin() + name.find( '#' ) };
-            }
-
-            // {action}
-            if ( name.find( ':' ) != std::string_view::npos )
-            {
-                action = { name.begin() + name.find( ':' ), name.end() };
-                name = { name.begin(), name.begin() + name.find( ':' ) };
-            }
-
-            // {element}
-            while ( name.find( '-' ) != std::string_view::npos )
-            {
-                elements.insert( elements.begin(), { name.begin() + name.find_last_of( '-' ), name.end() } );
-                name = { name.begin(), name.begin() + name.find_last_of( '-' ) };
-            }
-
-            // {type}
-            if ( !name.empty() )
-            {
-                type = name;
-            }
-
-            // {type}-{element}-{element}-{element}:{action}#{id}@{attr}
-            auto it = _selectors.find( std::format( "{}{}{}{}", type, std::span<std::string_view>{ elements }, action, id ) );
-            if ( it != _selectors.end() )
-            {
-                auto it2 = it->second.attrs.find( { attr.begin(), attr.end() } );
-                if ( it2 != it->second.attrs.end() )
-                    return it2->second;
-            }
-
-            // {type}-{element}-{element}-{element}:{action}@{attr}
-            it = _selectors.find( std::format( "{}{}{}", type, std::span<std::string_view>{ elements }, action ) );
-            if ( it != _selectors.end() )
-            {
-                auto it2 = it->second.attrs.find( { attr.begin(), attr.end() } );
-                if ( it2 != it->second.attrs.end() )
-                    return it2->second;
-            }
-
-            // {type}-{element}-{element}-{element}@{attr}
-            it = _selectors.find( std::format( "{}{}", type, std::span<std::string_view>{ elements } ) );
-            if ( it != _selectors.end() )
-            {
-                auto it2 = it->second.attrs.find( { attr.begin(), attr.end() } );
-                if ( it2 != it->second.attrs.end() )
-                    return it2->second;
-            }
-
-            // {type}-{element}-{element}-{element}@{attr}
-            // {type}-{element}-{element}@{attr}
-            // {type}-{element}@{attr}
-            if ( !elements.empty() )
-            {
-                auto beg = elements.begin();
-                auto end = elements.end();
-
-                while ( beg != end )
-                {
-                    it = _selectors.find( std::format( "{}{}", type, std::span<std::string_view>{ beg, end } ) );
-                    if ( it != _selectors.end() )
-                    {
-                        auto it2 = it->second.attrs.find( { attr.begin(), attr.end() } );
-                        if ( it2 != it->second.attrs.end() )
-                            return it2->second;
-                    }
-
-                    --end;
-                }
-            }
-
-            // {type}@{attr}
-            it = _selectors.find( { type.begin(), type.end() } );
-            if ( it != _selectors.end() )
-            {
-                auto it2 = it->second.attrs.find( { attr.begin(), attr.end() } );
-                if ( it2 != it->second.attrs.end() )
-                    return it2->second;
-            }
-
-            // *@{attr}
-            it = _selectors.find( "*" );
-            if ( it != _selectors.end() )
-            {
-                auto it2 = it->second.attrs.find( { attr.begin(), attr.end() } );
-                if ( it2 != it->second.attrs.end() )
-                    return it2->second;
-            }
-
-            return {};
-        }
-
-    private:
-        template<typename It> void skip( It & it, const It & end ) const
-        {
-            if ( it != end )
-            {
-                while ( it != end && ( *it == '\n' || *it == '\r' || *it == '\t' || *it == ' ' ) )
-                    ++it;
-            }
-        }
-        template<char c, typename It> It adv( It & it, const It & end ) const
-        {
-            if ( it != end )
-            {
-                while ( it != end && *it != c ) ++it;
-
-                auto result = it;
-
-                skip( it, end );
-
-                return result;
-            }
-
-            return it;
-        }
-        template<char c, typename It> bool check( It & it, const It & end ) const
-        {
-            if ( it != end )
-            {
-                skip( it, end );
-
-                if ( it != end && *it == c )
-                {
-                    ++it;
-
-                    skip( it, end );
-
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-    private:
-        std::pmr::map<std::string, selector> _selectors;
-    };
-
-    class xui_eventmap
-    {
-    public:
-        xui::point dt() const
-        {
-            return _cursorpos - _cursorold;
-        }
-        const xui::point & pos() const
-        {
-            return _cursorpos;
-        }
-        const xui::point & oldpos() const
-        {
-            return _cursorold;
-        }
-        int operator[]( int idx ) const
-        {
-            return _events[idx];
-        }
-
-    public:
-        xui::point _cursorpos = {}, _cursorold = {};
-        std::array<int, xui::event::EVENT_MAX_COUNT> _events = { 0 };
-    };
 }
 
 bool xui::rect::contains( const xui::point & p ) const
@@ -693,18 +266,311 @@ xui::color xui::color::lerp( const xui::color & target, float t ) const
     };
 }
 
-struct xui::draw_context::private_p
+xui::style::style( std::pmr::memory_resource * res )
+    : _selectors( res )
+{
+
+}
+void xui::style::load( std::string_view str )
+{
+    auto it = str.begin();
+
+    skip( it, str.end() );
+
+    while ( it != str.end() )
+    {
+        auto beg = it;
+        auto end = adv<'{'>( it, str.end() );
+
+        selector select;
+        select.name = { beg, end };
+
+        if ( check<'{'>( it, str.end() ) )
+        {
+            while ( !check<'}'>( it, str.end() ) )
+            {
+                beg = it;
+                end = adv<':'>( it, str.end() );
+
+                std::string name( beg, end );
+
+                check<':'>( it, str.end() );
+
+                beg = it;
+                end = adv<';'>( it, str.end() );
+
+                std::string val( beg, end );
+
+                if ( val.find( "#" ) == 0 )
+                {
+                    xui::color col;
+
+                    auto beg = val.begin() + 1;
+                    auto end = beg + std::min<std::size_t>( 2, std::distance( beg, val.end() ) );
+
+                    if ( end != val.end() )
+                    {
+                        col.r = std::stoi( std::string( beg, end ), nullptr, 16 );
+                    }
+
+                    if ( end != val.end() )
+                    {
+                        beg = end;
+                        end = beg + std::min<std::size_t>( 2, std::distance( beg, val.end() ) );
+                        col.g = std::stoi( std::string( beg, end ), nullptr, 16 );
+                    }
+
+                    if ( end != val.end() )
+                    {
+                        beg = end;
+                        end = beg + std::min<std::size_t>( 2, std::distance( beg, val.end() ) );
+                        col.b = std::stoi( std::string( beg, end ), nullptr, 16 );
+                    }
+
+                    if ( end != val.end() )
+                    {
+                        beg = end;
+                        end = beg + std::min<std::size_t>( 2, std::distance( beg, val.end() ) );
+                        col.a = std::stoi( std::string( beg, end ), nullptr, 16 );
+                    }
+
+                    select.attrs.insert( { name, col } );
+                }
+                else if ( val.find( "url(" ) == 0 )
+                {
+                    auto it = val.begin();
+                    auto beg = adv<'('>( it, val.end() ) + 1;
+                    auto end = adv<')'>( beg, val.end() );
+
+                    select.attrs.insert( { name, url( beg, end ) } );
+                }
+                else if ( val.find( "rgb(" ) == 0 )
+                {
+                    xui::color col;
+
+                    auto it = val.begin();
+
+                    auto beg = adv<'('>( it, val.end() ) + 1;
+
+                    auto r_beg = beg;
+                    auto r_end = adv<','>( beg, val.end() );
+                    col.r = std::stoi( std::string( r_beg, r_end ) );
+
+                    auto g_beg = r_end + 1; beg = g_beg;
+                    auto g_end = adv<','>( beg, val.end() );
+                    col.g = std::stoi( std::string( g_beg, g_end ) );
+
+                    auto b_beg = g_end + 1; beg = b_beg;
+                    auto b_end = adv<')'>( beg, val.end() );
+                    col.b = std::stoi( std::string( b_beg, b_end ) );
+
+                    select.attrs.insert( { name, col } );
+                }
+                else if ( val.find( "rgba(" ) == 0 )
+                {
+                    xui::color col;
+
+                    auto it = val.begin();
+
+                    auto beg = adv<'('>( it, val.end() ) + 1;
+
+                    auto r_beg = beg;
+                    auto r_end = adv<','>( beg, val.end() );
+                    col.r = std::stoi( std::string( r_beg, r_end ) );
+
+                    auto g_beg = r_end + 1; beg = g_beg;
+                    auto g_end = adv<','>( beg, val.end() );
+                    col.g = std::stoi( std::string( g_beg, g_end ) );
+
+                    auto b_beg = g_end + 1; beg = b_beg;
+                    auto b_end = adv<','>( beg, val.end() );
+                    col.b = std::stoi( std::string( b_beg, b_end ) );
+
+                    auto a_beg = b_end + 1; beg = a_beg;
+                    auto a_end = adv<')'>( beg, val.end() );
+                    col.a = std::stoi( std::string( a_beg, a_end ) );
+
+                    select.attrs.insert( { name, col } );
+                }
+                else if ( val.find( "vec4(" ) == 0 )
+                {
+                    xui::vec4 vec;
+
+                    auto it = val.begin();
+
+                    auto beg = adv<'('>( it, val.end() ) + 1;
+
+                    auto r_beg = beg;
+                    auto r_end = adv<','>( beg, val.end() );
+                    vec.x = std::stoi( std::string( r_beg, r_end ) );
+
+                    auto g_beg = r_end + 1; beg = g_beg;
+                    auto g_end = adv<','>( beg, val.end() );
+                    vec.y = std::stoi( std::string( g_beg, g_end ) );
+
+                    auto b_beg = g_end + 1; beg = b_beg;
+                    auto b_end = adv<','>( beg, val.end() );
+                    vec.z = std::stoi( std::string( b_beg, b_end ) );
+
+                    auto a_beg = b_end + 1; beg = a_beg;
+                    auto a_end = adv<')'>( beg, val.end() );
+                    vec.w = std::stoi( std::string( a_beg, a_end ) );
+
+                    select.attrs.insert( { name, vec } );
+                }
+                else if ( colors.find( val ) != colors.end() )
+                {
+                    select.attrs.insert( { name, xui::color( colors[val] ) } );
+                }
+                else if ( styles.find( val ) != styles.end() )
+                {
+                    select.attrs.insert( { name, styles[val] } );
+                }
+                else if ( aligns.find( val ) != aligns.end() )
+                {
+                    select.attrs.insert( { name, aligns[val] } );
+                }
+                else if ( std::regex_match( val, float_regex ) )
+                {
+                    select.attrs.insert( { name, std::stof( val ) } );
+                }
+                else
+                {
+                    select.attrs.insert( { name, val } );
+                }
+
+                check<';'>( it, str.end() );
+            }
+        }
+
+        check<','>( it, str.end() );
+
+        _selectors.insert( { select.name, select } );
+    }
+
+    int i = 0;
+}
+xui::style::variant xui::style::find( std::string_view name ) const
+{
+    // {type}-{element}-{element}-{element}:{action}#{id}@{attr}
+    std::string_view type, action, id, attr;
+    std::pmr::vector<std::string_view> elements( _selectors.get_allocator().resource() );
+
+    // {attr}
+    if ( name.find( '@' ) != std::string_view::npos )
+    {
+        attr = { name.begin() + name.find( '@' ) + 1, name.end() };
+        name = { name.begin(), name.begin() + name.find( '@' ) };
+    }
+
+    // {id}
+    if ( name.find( '#' ) != std::string_view::npos )
+    {
+        id = { name.begin() + name.find( '#' ), name.end() };
+        name = { name.begin(), name.begin() + name.find( '#' ) };
+    }
+
+    // {action}
+    if ( name.find( ':' ) != std::string_view::npos )
+    {
+        action = { name.begin() + name.find( ':' ), name.end() };
+        name = { name.begin(), name.begin() + name.find( ':' ) };
+    }
+
+    // {element}
+    while ( name.find( '-' ) != std::string_view::npos )
+    {
+        elements.insert( elements.begin(), { name.begin() + name.find_last_of( '-' ), name.end() } );
+        name = { name.begin(), name.begin() + name.find_last_of( '-' ) };
+    }
+
+    // {type}
+    if ( !name.empty() )
+    {
+        type = name;
+    }
+
+    // {type}-{element}-{element}-{element}:{action}#{id}@{attr}
+    auto it = _selectors.find( std::format( "{}{}{}{}", type, std::span<std::string_view>{ elements }, action, id ) );
+    if ( it != _selectors.end() )
+    {
+        auto it2 = it->second.attrs.find( { attr.begin(), attr.end() } );
+        if ( it2 != it->second.attrs.end() )
+            return it2->second;
+    }
+
+    // {type}-{element}-{element}-{element}:{action}@{attr}
+    it = _selectors.find( std::format( "{}{}{}", type, std::span<std::string_view>{ elements }, action ) );
+    if ( it != _selectors.end() )
+    {
+        auto it2 = it->second.attrs.find( { attr.begin(), attr.end() } );
+        if ( it2 != it->second.attrs.end() )
+            return it2->second;
+    }
+
+    // {type}-{element}-{element}-{element}@{attr}
+    it = _selectors.find( std::format( "{}{}", type, std::span<std::string_view>{ elements } ) );
+    if ( it != _selectors.end() )
+    {
+        auto it2 = it->second.attrs.find( { attr.begin(), attr.end() } );
+        if ( it2 != it->second.attrs.end() )
+            return it2->second;
+    }
+
+    // {type}-{element}-{element}-{element}@{attr}
+    // {type}-{element}-{element}@{attr}
+    // {type}-{element}@{attr}
+    if ( !elements.empty() )
+    {
+        auto beg = elements.begin();
+        auto end = elements.end();
+
+        while ( beg != end )
+        {
+            it = _selectors.find( std::format( "{}{}", type, std::span<std::string_view>{ beg, end } ) );
+            if ( it != _selectors.end() )
+            {
+                auto it2 = it->second.attrs.find( { attr.begin(), attr.end() } );
+                if ( it2 != it->second.attrs.end() )
+                    return it2->second;
+            }
+
+            --end;
+        }
+    }
+
+    // {type}@{attr}
+    it = _selectors.find( { type.begin(), type.end() } );
+    if ( it != _selectors.end() )
+    {
+        auto it2 = it->second.attrs.find( { attr.begin(), attr.end() } );
+        if ( it2 != it->second.attrs.end() )
+            return it2->second;
+    }
+
+    // *@{attr}
+    it = _selectors.find( "*" );
+    if ( it != _selectors.end() )
+    {
+        auto it2 = it->second.attrs.find( { attr.begin(), attr.end() } );
+        if ( it2 != it->second.attrs.end() )
+            return it2->second;
+    }
+
+    return {};
+}
+
+struct xui::context::private_p
 {
 public:
     private_p( std::pmr::memory_resource * res )
         : _res( res )
         , _commands( res )
-        , _eventmaps( res )
-        , _xss( res )
         , _rects( res )
         , _types( res )
         , _fonts( res )
         , _ids( res )
+        , _styles( res )
         , _windows( res )
         , _textures( res )
         , _windowflags( res )
@@ -712,11 +578,7 @@ public:
     }
 
 public:
-    xui_eventmap & eventmap()
-    {
-        return _eventmaps[_windows.back()];
-    }
-    xss::variant find_style( std::string_view attr ) const
+    xui::style::variant find_style( std::string_view attr ) const
     {
         std::string name{ _types.back() };
 
@@ -728,9 +590,9 @@ public:
         name.append( "@" );
         name.append( attr );
 
-        for ( auto it = _xss.rbegin(); it != _xss.rend(); ++it )
+        for ( auto it = _styles.rbegin(); it != _styles.rend(); ++it )
         {
-            auto val = it->find( name );
+            auto val = ( *it )->find( name );
             if ( val.index() != 0 )
                 return val;
         }
@@ -740,30 +602,30 @@ public:
 
 public:
     float _factor = 1.0f;
+    xui::implement * _impl = nullptr;
     error_callback_type _error = nullptr;
     std::pmr::memory_resource * _res = nullptr;
 
 public:
-    std::pmr::vector<xui::drawcommand> _commands;
-    std::pmr::map<xui::window_id, xui_eventmap> _eventmaps;
+    std::pmr::vector<xui::drawcmd> _commands;
 
 public:
-    std::pmr::deque<xss> _xss;
     std::pmr::deque<xui::rect> _rects;
     std::pmr::deque<std::string> _types;
     std::pmr::deque<xui::font_id> _fonts;
     std::pmr::deque<xui::string_id> _ids;
+    std::pmr::deque<xui::style *> _styles;
     std::pmr::deque<xui::window_id> _windows;
     std::pmr::deque<xui::texture_id> _textures;
     std::pmr::deque<xui::window_flag> _windowflags;
 };
 
-xui::draw_context::draw_context( std::pmr::memory_resource * res )
+xui::context::context( std::pmr::memory_resource * res )
     : _p( new ( res->allocate( sizeof( private_p ) ) ) private_p( res ) )
 {
 }
 
-xui::draw_context::~draw_context()
+xui::context::~context()
 {
     auto res = _p->_commands.get_allocator().resource();
 
@@ -772,7 +634,7 @@ xui::draw_context::~draw_context()
     res->deallocate( _p, sizeof( private_p ) );
 }
 
-std::string xui::draw_context::dark_style()
+std::string_view xui::context::dark_style()
 {
     return
 R"(
@@ -896,89 +758,52 @@ R"(
 )";
 }
 
-std::string xui::draw_context::light_style()
+std::string_view xui::context::light_style()
 {
     return "";
 }
 
-void xui::draw_context::init()
+void xui::context::init( implement * impl )
 {
-    push_style( dark_style() );
+    _p->_impl = impl;
 }
 
-void xui::draw_context::release()
+void xui::context::release()
 {
-    pop_style();
+    _p->_impl = nullptr;
 }
 
-void xui::draw_context::set_event( xui::window_id id, event key, int val )
-{
-    if ( id != xui::invalid_id )
-    {
-        if ( key > xui::event::WINDOW_EVENT_BEG && key <= xui::event::WINDOW_EVENT_END )
-        {
-            if ( key == xui::event::WINDOW_CLOSE )
-            {
-                _p->_eventmaps.erase( id );
-            }
-        }
-        else if ( key > xui::event::MOUSE_EVENT_BEG && key <= xui::event::MOUSE_EVENT_END )
-        {
-            switch ( key )
-            {
-            case MOUSE_MOVE:
-                _p->_eventmaps[id]._cursorold = _p->_eventmaps[id]._cursorpos;
-                _p->_eventmaps[id]._cursorpos = { (float)( val & 0xFFFF ), (float)( ( val >> 16 ) & 0xFFFF ) };
-                break;
-            }
-
-            _p->_eventmaps[id]._events[key] = val;
-        }
-        else if ( key > xui::event::KEY_EVENT_BEG && key <= xui::event::KEY_EVENT_END )
-        {
-            if ( val == 0 )
-                _p->_eventmaps[id]._events[key] = val;
-            else
-                _p->_eventmaps[id]._events[key] += val;
-        }
-    }
-}
-
-void xui::draw_context::set_scale( float factor )
+void xui::context::set_scale( float factor )
 {
     _p->_factor = factor;
 }
 
-void xui::draw_context::set_error( const xui::error_callback_type & callback )
+void xui::context::set_error( const xui::error_callback_type & callback )
 {
     _p->_error = callback;
 }
 
-void xui::draw_context::push_style( std::string_view style )
+void xui::context::push_style( xui::style * style )
 {
-    xss xs( _p->_res );
-
-    xs.load( style );
-
-    _p->_xss.emplace_back( std::move( xs ) );
+    _p->_styles.emplace_back( style );
 }
 
-void xui::draw_context::pop_style()
+void xui::context::pop_style()
 {
-    _p->_xss.pop_back();
+    _p->_styles.pop_back();
 }
 
-void xui::draw_context::push_font( xui::font_id font )
+void xui::context::push_font( xui::font_id font )
 {
     _p->_fonts.push_back( font );
 }
 
-void xui::draw_context::pop_font()
+void xui::context::pop_font()
 {
     _p->_fonts.pop_back();
 }
 
-xui::font_id xui::draw_context::current_font() const
+xui::font_id xui::context::current_font() const
 {
     if ( _p->_fonts.empty() )
     {
@@ -989,17 +814,17 @@ xui::font_id xui::draw_context::current_font() const
     return _p->_fonts.back();
 }
 
-void xui::draw_context::push_window( xui::window_id id )
+void xui::context::push_window( xui::window_id id )
 {
     _p->_windows.push_back( id );
 }
 
-void xui::draw_context::pop_window()
+void xui::context::pop_window()
 {
     return _p->_windows.pop_back();
 }
 
-xui::window_id xui::draw_context::current_window() const
+xui::window_id xui::context::current_window() const
 {
     if ( _p->_windows.empty() )
     {
@@ -1010,17 +835,17 @@ xui::window_id xui::draw_context::current_window() const
     return _p->_windows.back();
 }
 
-void xui::draw_context::push_texture( xui::texture_id id )
+void xui::context::push_texture( xui::texture_id id )
 {
     _p->_textures.push_back( id );
 }
 
-void xui::draw_context::pop_texture()
+void xui::context::pop_texture()
 {
     _p->_textures.pop_back();
 }
 
-xui::texture_id xui::draw_context::current_texture() const
+xui::texture_id xui::context::current_texture() const
 {
     if ( _p->_textures.empty() )
     {
@@ -1031,17 +856,17 @@ xui::texture_id xui::draw_context::current_texture() const
     return _p->_textures.back();
 }
 
-void xui::draw_context::push_string_id( xui::string_id id )
+void xui::context::push_string_id( xui::string_id id )
 {
     _p->_ids.push_back( id );
 }
 
-void xui::draw_context::pop_string_id()
+void xui::context::pop_string_id()
 {
     _p->_ids.pop_back();
 }
 
-xui::string_id xui::draw_context::current_string_id() const
+xui::string_id xui::context::current_string_id() const
 {
     if ( _p->_ids.empty() )
     {
@@ -1052,17 +877,17 @@ xui::string_id xui::draw_context::current_string_id() const
     return _p->_ids.back();
 }
 
-void xui::draw_context::push_rect( const xui::rect & rect )
+void xui::context::push_rect( const xui::rect & rect )
 {
     _p->_rects.push_back( rect );
 }
 
-void xui::draw_context::pop_rect()
+void xui::context::pop_rect()
 {
     _p->_rects.pop_back();
 }
 
-xui::rect xui::draw_context::currrent_rect() const
+xui::rect xui::context::currrent_rect() const
 {
     if ( _p->_rects.empty() )
     {
@@ -1073,60 +898,40 @@ xui::rect xui::draw_context::currrent_rect() const
     return _p->_rects.back();
 }
 
-void xui::draw_context::push_window_flag( xui::window_flag flag )
+void xui::context::push_window_flag( xui::window_flag flag )
 {
     _p->_windowflags.push_back( flag );
 }
 
-void xui::draw_context::pop_window_flag()
+void xui::context::pop_window_flag()
 {
     _p->_windowflags.pop_back();
 }
 
-xui::window_flag xui::draw_context::current_flag() const
+xui::window_flag xui::context::current_flag() const
 {
     return _p->_windowflags.back();
 }
 
-void xui::draw_context::begin()
+void xui::context::begin()
 {
     _p->_commands.clear();
 }
 
-std::span<xui::drawcommand> xui::draw_context::end()
+std::span<xui::drawcmd> xui::context::end()
 {
-    for ( auto & it : _p->_eventmaps )
-    {
-        for ( int i = 0; i < it.second._events.size(); i++ )
-        {
-            if ( i > xui::event::WINDOW_EVENT_BEG && i <= xui::event::WINDOW_EVENT_END )
-            {
-                it.second._events[i] = 0;
-            }
-            else if ( i > xui::event::MOUSE_EVENT_BEG && i <= xui::event::MOUSE_EVENT_END )
-            {
-                if ( i == xui::event::MOUSE_WHEEL )
-                    it.second._events[i] = 0;
-            }
-            else if ( i > xui::event::KEY_EVENT_BEG && i <= xui::event::KEY_EVENT_END )
-            {
-                it.second._events[i] = std::max( it.second._events[i] - 1, 0 );
-            }
-        }
-    }
-
     std::sort( _p->_commands.begin(), _p->_commands.end(), []( const auto & left, const auto & right ) { return left.id < right.id; } );
 
     return _p->_commands;
 }
 
-bool xui::draw_context::begin_window( std::string_view title, xui::texture_id icon_id, xui::window_flag flags )
+bool xui::context::begin_window( std::string_view title, xui::texture_id icon_id, xui::window_flag flags )
 {
     auto id = current_window();
     auto wrect = currrent_rect();
     wrect.x = 0; wrect.y = 0;
 
-    auto status = get_window_status( current_window() );
+    auto status = _p->_impl->get_window_status( current_window() );
     if ( (status & xui::windowstatus::SHOW ) != 0 )
     {
         draw_type( "window", [&]()
@@ -1145,7 +950,7 @@ bool xui::draw_context::begin_window( std::string_view title, xui::texture_id ic
 
                     draw_element( "title", [&]()
                     {
-                        draw_text( title, { 30, 5, wrect.w - 150, 20 } );
+                        draw_text( title, current_font(), { 30, 5, wrect.w - 150, 20 } );
                     } );
 
                     if ( ( flags & xui::window_flag::WINDOW_NO_CLOSEBOX ) == 0 )
@@ -1155,9 +960,9 @@ bool xui::draw_context::begin_window( std::string_view title, xui::texture_id ic
                             xui::point center = { wrect.w - 25, 15 };
                             xui::rect rect = { center.x - 25, 0, 50, 30 };
 
-                            if ( _p->eventmap()[xui::event::KEY_MOUSE_LEFT] && rect.contains( _p->eventmap().pos() ) )
-                                remove_window( id );
-                            else if ( _p->eventmap()[xui::event::MOUSE_ENTER] && rect.contains( _p->eventmap().pos() ) )
+                            if ( _p->_impl->get_key(id, xui::event::KEY_MOUSE_LEFT) && rect.contains( _p->_impl->get_cursor_pos( id ) ) )
+                                _p->_impl->remove_window( id );
+                            else if ( _p->_impl->get_key( id, xui::event::MOUSE_ENTER) && rect.contains( _p->_impl->get_cursor_pos( id ) ) )
                                 draw_action( "hover", [&]() { draw_rect( rect ); } );
                             else
                                 draw_rect( rect );
@@ -1178,9 +983,9 @@ bool xui::draw_context::begin_window( std::string_view title, xui::texture_id ic
                             xui::point center = { wrect.w - 75, 15 };
                             xui::rect rect = { center.x - 25, 0, 50, 30 };
 
-                            if ( _p->eventmap()[xui::event::KEY_MOUSE_LEFT] && rect.contains( _p->eventmap().pos() ) )
-                                set_window_status( current_window(), ( ( status & xui::windowstatus::MAXIMIZE ) != 0 ) ? xui::windowstatus::RESTORE : xui::windowstatus::MAXIMIZE );
-                            else if ( _p->eventmap()[xui::event::MOUSE_ENTER] && rect.contains( _p->eventmap().pos() ) )
+                            if ( _p->_impl->get_key( id, xui::event::KEY_MOUSE_LEFT) && rect.contains( _p->_impl->get_cursor_pos( id ) ) )
+                                _p->_impl->set_window_status( current_window(), ( ( status & xui::windowstatus::MAXIMIZE ) != 0 ) ? xui::windowstatus::RESTORE : xui::windowstatus::MAXIMIZE );
+                            else if ( _p->_impl->get_key( id, xui::event::MOUSE_ENTER) && rect.contains( _p->_impl->get_cursor_pos( id ) ) )
                                 draw_action( "hover", [&]() { draw_rect( rect ); } );
                             else
                                 draw_rect( rect );
@@ -1220,9 +1025,9 @@ bool xui::draw_context::begin_window( std::string_view title, xui::texture_id ic
                             xui::point center = { wrect.w - 125, 15 };
                             xui::rect rect = { center.x - 25, 0, 50, 30 };
 
-                            if ( _p->eventmap()[xui::event::KEY_MOUSE_LEFT] && rect.contains( _p->eventmap().pos() ) )
-                                set_window_status( current_window(), xui::windowstatus::MINIMIZE );
-                            else if ( _p->eventmap()[xui::event::MOUSE_ENTER] && rect.contains( _p->eventmap().pos() ) )
+                            if ( _p->_impl->get_key( id, xui::event::KEY_MOUSE_LEFT) && rect.contains( _p->_impl->get_cursor_pos( id ) ) )
+                                _p->_impl->set_window_status( current_window(), xui::windowstatus::MINIMIZE );
+                            else if ( _p->_impl->get_key( id, xui::event::MOUSE_ENTER) && rect.contains( _p->_impl->get_cursor_pos( id ) ) )
                                 draw_action( "hover", [&]() { draw_rect( rect ); } );
                             else
                                 draw_rect( rect );
@@ -1243,34 +1048,35 @@ bool xui::draw_context::begin_window( std::string_view title, xui::texture_id ic
     else
         push_rect( wrect );
 
-    status = get_window_status( current_window() );
+    status = _p->_impl->get_window_status( current_window() );
     return ( ( status & xui::windowstatus::SHOW ) != 0 );
 }
 
-void xui::draw_context::end_window()
+void xui::context::end_window()
 {
     pop_rect();
 }
 
-void xui::draw_context::label( std::string_view text )
+void xui::context::label( std::string_view text )
 {
-    draw_type( "label", [&]() { draw_text( text, currrent_rect() ); } );
+    draw_type( "label", [&]() { draw_text( text, current_font(), currrent_rect() ); } );
 }
 
-void xui::draw_context::image( xui::texture_id id )
+void xui::context::image( xui::texture_id id )
 {
     draw_type( "image", [&]() { draw_image( id, currrent_rect() ); } );
 }
 
-bool xui::draw_context::button( std::string_view text )
+bool xui::context::button( std::string_view text )
 {
+    auto id = current_window();
     auto rect = currrent_rect();
 
     draw_type( "button", [&]()
     {
-        if ( _p->eventmap()[xui::event::KEY_MOUSE_LEFT] && rect.contains( _p->eventmap().pos() ) )
+        if ( _p->_impl->get_key( id, xui::event::KEY_MOUSE_LEFT) && rect.contains( _p->_impl->get_cursor_pos( id ) ) )
             draw_action( "active", [&]() { draw_rect( rect ); } );
-        else if ( _p->eventmap()[xui::event::MOUSE_ENTER] && rect.contains( _p->eventmap().pos() ) )
+        else if ( _p->_impl->get_key( id, xui::event::MOUSE_ENTER) && rect.contains( _p->_impl->get_cursor_pos( id ) ) )
             draw_action( "hover", [&]() { draw_rect( rect ); } );
         else
             draw_rect( rect );
@@ -1279,85 +1085,85 @@ bool xui::draw_context::button( std::string_view text )
         {
             if ( !text.empty() )
             {
-                if ( _p->eventmap()[xui::event::KEY_MOUSE_LEFT] && rect.contains( _p->eventmap().pos() ) )
-                    draw_action( "active", [&]() { draw_text( text, rect ); } );
-                else if ( _p->eventmap()[xui::event::MOUSE_ENTER] && rect.contains( _p->eventmap().pos() ) )
-                    draw_action( "hover", [&]() { draw_text( text, rect ); } );
+                if ( _p->_impl->get_key( id, xui::event::KEY_MOUSE_LEFT) && rect.contains( _p->_impl->get_cursor_pos( id ) ) )
+                    draw_action( "active", [&]() { draw_text( text, current_font(), rect ); } );
+                else if ( _p->_impl->get_key( id, xui::event::MOUSE_ENTER) && rect.contains( _p->_impl->get_cursor_pos( id ) ) )
+                    draw_action( "hover", [&]() { draw_text( text, current_font(), rect ); } );
                 else
-                    draw_text( text, rect );
+                    draw_text( text, current_font(), rect );
             }
         } );
     } );
 
-    return ( _p->eventmap()[xui::event::KEY_MOUSE_LEFT] && rect.contains( _p->eventmap().pos() ) );
+    return ( _p->_impl->get_key( id, xui::event::KEY_MOUSE_LEFT) && rect.contains( _p->_impl->get_cursor_pos( id ) ) );
 }
 
-void xui::draw_context::push_type( std::string_view type )
+void xui::context::push_type( std::string_view type )
 {
     _p->_types.push_back( { type.begin(), type.end() } );
 }
 
-void xui::draw_context::push_element( std::string_view element )
+void xui::context::push_element( std::string_view element )
 {
     _p->_types.push_back( std::format( "{}-{}", _p->_types.back(), element ) );
 }
 
-void xui::draw_context::push_action( std::string_view action )
+void xui::context::push_action( std::string_view action )
 {
     _p->_types.push_back( std::format( "{}:{}", _p->_types.back(), action ) );
 }
 
-void xui::draw_context::pop_action()
+void xui::context::pop_action()
 {
     _p->_types.pop_back();
 }
 
-void xui::draw_context::pop_element()
+void xui::context::pop_element()
 {
     _p->_types.pop_back();
 }
 
-void xui::draw_context::pop_type()
+void xui::context::pop_type()
 {
     _p->_types.pop_back();
 }
 
-xui::drawcommand::text_element & xui::draw_context::draw_text( std::string_view text, const xui::rect & rect )
+xui::drawcmd::text_element & xui::context::draw_text( std::string_view text, xui::font_id id, const xui::rect & rect )
 {
-    xui::drawcommand::text_element element;
+    xui::drawcmd::text_element element;
 
+    element.font = id;
     element.text = text;
     element.rect = rect;
-    element.font = _p->_fonts.back();
     element.color = _p->find_style( "stroke-color" ).value<xui::color>();
     element.align = _p->find_style( "text-align" ).value<xui::alignment_flag>( xui::alignment_flag::CENTER );
 
     _p->_commands.push_back( { current_window(), element } );
 
-    return std::get<xui::drawcommand::text_element>( _p->_commands.back().element );
+    return std::get<xui::drawcmd::text_element>( _p->_commands.back().element );
 }
 
-xui::drawcommand::line_element & xui::draw_context::draw_line( const xui::point & p1, const xui::point & p2 )
+xui::drawcmd::line_element & xui::context::draw_line( const xui::point & p1, const xui::point & p2 )
 {
-    xui::drawcommand::line_element element;
+    xui::drawcmd::line_element element;
 
     element.p1 = p1;
     element.p2 = p2;
-    element.stroke.style = _p->find_style( "stroke-style" ).value<int>( xui::drawcommand::stroke::SOLID );
+    element.stroke.style = _p->find_style( "stroke-style" ).value<int>( xui::drawcmd::stroke::SOLID );
     element.stroke.width = _p->find_style( "stroke-width" ).value<float>( 1.0f );
     element.stroke.color = _p->find_style( "stroke-color" ).value<xui::color>();
 
     _p->_commands.push_back( { current_window(), element } );
 
-    return std::get<xui::drawcommand::line_element>( _p->_commands.back().element );
+    return std::get<xui::drawcmd::line_element>( _p->_commands.back().element );
 }
 
-xui::drawcommand::rect_element & xui::draw_context::draw_rect( const xui::rect & rect )
+xui::drawcmd::rect_element & xui::context::draw_rect( const xui::rect & rect )
 {
-    xui::drawcommand::rect_element element;
+    xui::drawcmd::rect_element element;
 
     element.rect = rect;
-    element.border.style = _p->find_style( "border-style" ).value<int>( xui::drawcommand::stroke::SOLID );
+    element.border.style = _p->find_style( "border-style" ).value<int>( xui::drawcmd::stroke::SOLID );
     element.border.width = _p->find_style( "border-width" ).value<float>( 1.0f );
     element.border.color = _p->find_style( "border-color" ).value<xui::color>();
     element.border.radius = _p->find_style( "border-radius" ).value<xui::vec4>();
@@ -1365,67 +1171,67 @@ xui::drawcommand::rect_element & xui::draw_context::draw_rect( const xui::rect &
 
     _p->_commands.push_back( { current_window(), element } );
 
-    return std::get<xui::drawcommand::rect_element>( _p->_commands.back().element );
+    return std::get<xui::drawcmd::rect_element>( _p->_commands.back().element );
 }
 
-xui::drawcommand::path_element & xui::draw_context::draw_path( std::string_view data )
+xui::drawcmd::path_element & xui::context::draw_path( std::string_view data )
 {
-    xui::drawcommand::path_element element;
+    xui::drawcmd::path_element element;
 
     element.data = data;
-    element.stroke.style = _p->find_style( "stroke-style" ).value<int>( xui::drawcommand::stroke::SOLID );
+    element.stroke.style = _p->find_style( "stroke-style" ).value<int>( xui::drawcmd::stroke::SOLID );
     element.stroke.width = _p->find_style( "stroke-width" ).value<float>( 1.0f );
     element.stroke.color = _p->find_style( "stroke-color" ).value<xui::color>();
     element.filled.color = _p->find_style( "background-color" ).value<xui::color>();
 
     _p->_commands.push_back( { current_window(), element } );
 
-    return std::get<xui::drawcommand::path_element>( _p->_commands.back().element );
+    return std::get<xui::drawcmd::path_element>( _p->_commands.back().element );
 }
 
-xui::drawcommand::image_element & xui::draw_context::draw_image( xui::texture_id id, const xui::rect & rect )
+xui::drawcmd::image_element & xui::context::draw_image( xui::texture_id id, const xui::rect & rect )
 {
-    xui::drawcommand::image_element element;
+    xui::drawcmd::image_element element;
 
     element.id = id;
     element.rect = rect;
 
     _p->_commands.push_back( { current_window(), element } );
 
-    return std::get<xui::drawcommand::image_element>( _p->_commands.back().element );
+    return std::get<xui::drawcmd::image_element>( _p->_commands.back().element );
 }
 
-xui::drawcommand::circle_element & xui::draw_context::draw_circle( const xui::point & center, float radius )
+xui::drawcmd::circle_element & xui::context::draw_circle( const xui::point & center, float radius )
 {
-    xui::drawcommand::circle_element element;
+    xui::drawcmd::circle_element element;
 
     element.center = center;
     element.radius = radius;
 
     _p->_commands.push_back( { current_window(), element } );
 
-    return std::get<xui::drawcommand::circle_element>( _p->_commands.back().element );
+    return std::get<xui::drawcmd::circle_element>( _p->_commands.back().element );
 }
 
-xui::drawcommand::ellipse_element & xui::draw_context::draw_ellipse( const xui::point & center, const xui::point & radius )
+xui::drawcmd::ellipse_element & xui::context::draw_ellipse( const xui::point & center, const xui::point & radius )
 {
-    xui::drawcommand::ellipse_element element;
+    xui::drawcmd::ellipse_element element;
 
     element.center = center;
     element.radius = radius;
 
     _p->_commands.push_back( { current_window(), element } );
 
-    return std::get<xui::drawcommand::ellipse_element>( _p->_commands.back().element );
+    return std::get<xui::drawcmd::ellipse_element>( _p->_commands.back().element );
 }
 
-xui::drawcommand::polygon_element & xui::draw_context::draw_polygon( std::span<xui::point> points )
+xui::drawcmd::polygon_element & xui::context::draw_polygon( std::span<xui::point> points )
 {
-    xui::drawcommand::polygon_element element;
+    xui::drawcmd::polygon_element element;
 
     element.points.assign( points.begin(), points.end() );
 
     _p->_commands.push_back( { current_window(), element } );
 
-    return std::get<xui::drawcommand::polygon_element>( _p->_commands.back().element );
+    return std::get<xui::drawcmd::polygon_element>( _p->_commands.back().element );
 }

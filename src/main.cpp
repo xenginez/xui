@@ -1,25 +1,30 @@
 #include <iostream>
-#include "win_context.h"
+#include "gdi_implement.h"
 
 int main()
 {
-	win_context ctx;
+	xui::context ctx;
+	gdi_implement imp;
+	xui::style darkstyle;
+	darkstyle.load( xui::context::dark_style() );
 
-	ctx.init();
+	imp.init();
+	ctx.init( &imp );
 
-	auto font = ctx.create_font( xui::system_resource::FONT_DEFAULT );
-	auto icon = ctx.create_texture( xui::system_resource::ICON_APPLICATION );
-	auto window = ctx.create_window( "XUI", icon, { 2260, 540, 600, 600 } );
+	auto font = imp.create_font( xui::system_resource::FONT_DEFAULT, 16, xui::font_flag::FONT_NONE );
+	auto icon = imp.create_texture( xui::system_resource::ICON_APPLICATION );
+	auto window = imp.create_window( "XUI", icon, { 500, 540, 600, 600 } );
 
 	ctx.push_font( font );
+	ctx.push_style( &darkstyle );
 
-	ctx.update( [&]()
+	imp.update( [&]()
 	{
-		return ctx.draw( [&]( xui::draw_context & ctx )
+		return ctx.draw( [&]()
 		{
 			ctx.push_window( window );
 			
-			ctx.push_rect( ctx.get_window_rect( window ) );
+			ctx.push_rect( imp.get_window_rect( window ) );
 			{
 				ctx.begin_window( "³¬¼¶UI", icon );
 				{
@@ -47,6 +52,7 @@ int main()
 	} );
 
 	ctx.release();
+	imp.release();
 
 	return 0;
 }

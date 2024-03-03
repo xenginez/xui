@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include <map>
 #include <span>
 #include <format>
 #include <string>
@@ -15,9 +16,10 @@ namespace xui
 	class vec4;
 	class point;
 	class color;
-	class drawcommand;
-	class base_context;
-	class draw_context;
+	class style;
+	class drawcmd;
+	class context;
+	class implement;
 
 	enum err
 	{
@@ -136,11 +138,11 @@ namespace xui
 
 	enum font_flag
 	{
-		FONT_NONE,
-		FONT_BOLD,
-		FONT_ITALIC,
-		FONT_UNDERLINE,
-		FONT_STRIKEOUT,
+		FONT_NONE						= 0,
+		FONT_BOLD						= 1 << 0,
+		FONT_ITALIC						= 1 << 1,
+		FONT_UNDERLINE					= 1 << 2,
+		FONT_STRIKEOUT					= 1 << 3,
 	};
 	enum window_flag
 	{
@@ -187,8 +189,8 @@ namespace xui
 	using string_id = std::string_view;
 	static constexpr const std::size_t invalid_id = std::numeric_limits<std::size_t>::max();
 
-	using error_callback_type = std::function<void( const draw_context *, std::error_code )>;
-	using item_data_callback_type = std::function<std::string_view( const draw_context *, int row, int col )>;
+	using error_callback_type = std::function<void( const context *, std::error_code )>;
+	using item_data_callback_type = std::function<std::string_view( const context *, int row, int col )>;
 
 	class size
 	{
@@ -242,7 +244,119 @@ namespace xui
 		xui::color lerp( const xui::color & target, float t ) const;
 	};
 
-	class drawcommand
+	class style
+	{
+	public:
+		struct url : public std::string
+		{
+		public:
+			std::string::basic_string;
+		};
+		struct variant : public std::variant<std::monostate, int, float, std::string, xui::color, xui::vec4, url>
+		{
+		public:
+			using std::variant<std::monostate, int, float, std::string, xui::color, xui::vec4, url>::variant;
+
+		public:
+			template<typename T> T value( const T & def = {} ) const
+			{
+				if ( index() == 0 )
+					return def;
+
+				if constexpr ( std::is_enum_v<T> )
+				{
+					return (T)std::get<int>( *this );
+				}
+				else if constexpr ( std::is_same_v<T, int> )
+				{
+					if ( index() == 2 )
+						return (T)std::get<float>( *this );
+
+					return std::get<T>( *this );
+				}
+				else if constexpr ( std::is_same_v<T, float> )
+				{
+					if ( index() == 3 )
+						return (T)std::get<float>( *this );
+
+					return std::get<T>( *this );
+				}
+				else if constexpr ( std::is_same_v<T, std::string> )
+				{
+					if ( index() == 6 )
+						return std::get<url>( *this );
+
+					return std::get<T>( *this );
+				}
+				else
+				{
+					return std::get<T>( *this );
+				}
+
+				return def;
+			}
+		};
+		struct selector
+		{
+			std::string name;
+			std::pmr::map<std::string, variant> attrs;
+		};
+
+	public:
+		style( std::pmr::memory_resource * res = std::pmr::get_default_resource() );
+
+	public:
+		void load( std::string_view str );
+		variant find( std::string_view name ) const;
+
+	private:
+		template<typename It> void skip( It & it, const It & end ) const
+		{
+			if ( it != end )
+			{
+				while ( it != end && ( *it == '\n' || *it == '\r' || *it == '\t' || *it == ' ' ) )
+					++it;
+			}
+		}
+		template<char c, typename It> It adv( It & it, const It & end ) const
+		{
+			if ( it != end )
+			{
+				while ( it != end && *it != c ) ++it;
+
+				auto result = it;
+
+				skip( it, end );
+
+				return result;
+			}
+
+			return it;
+		}
+		template<char c, typename It> bool check( It & it, const It & end ) const
+		{
+			if ( it != end )
+			{
+				skip( it, end );
+
+				if ( it != end && *it == c )
+				{
+					++it;
+
+					skip( it, end );
+
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+	private:
+		std::pmr::map<std::string, selector> _selectors;
+	};
+
+	class drawcmd
 	{
 	public:
 		struct stroke
@@ -279,13 +393,13 @@ namespace xui
 		struct line_element
 		{
 			xui::point p1, p2;
-			xui::drawcommand::stroke stroke;
+			xui::drawcmd::stroke stroke;
 		};
 		struct rect_element
 		{
 			xui::rect rect;
-			xui::drawcommand::stroke border;
-			xui::drawcommand::filled filled;
+			xui::drawcmd::stroke border;
+			xui::drawcmd::filled filled;
 		};
 		struct path_element
 		{
@@ -331,8 +445,8 @@ namespace xui
 			}
 
 			std::string data;
-			xui::drawcommand::stroke stroke;
-			xui::drawcommand::filled filled;
+			xui::drawcmd::stroke stroke;
+			xui::drawcmd::filled filled;
 		};
 		struct image_element
 		{
@@ -343,20 +457,20 @@ namespace xui
 		{
 			float radius = 1;
 			xui::point center;
-			xui::drawcommand::stroke border;
-			xui::drawcommand::filled filled;
+			xui::drawcmd::stroke border;
+			xui::drawcmd::filled filled;
 		};
 		struct ellipse_element
 		{
 			xui::point center;
 			xui::point radius;
-			xui::drawcommand::stroke border;
-			xui::drawcommand::filled filled;
+			xui::drawcmd::stroke border;
+			xui::drawcmd::filled filled;
 		};
 		struct polygon_element
 		{
-			xui::drawcommand::stroke border;
-			xui::drawcommand::filled filled;
+			xui::drawcmd::stroke border;
+			xui::drawcmd::filled filled;
 			std::pmr::vector<xui::point> points;
 		};
 
@@ -365,66 +479,35 @@ namespace xui
 		std::variant<std::monostate, text_element, line_element, rect_element, path_element, image_element, circle_element, ellipse_element, polygon_element> element;
 	};
 
-	class base_context
-	{
-	private:
-		base_context( base_context && ) = delete;
-		base_context( const base_context & ) = delete;
-		base_context & operator=( base_context && ) = delete;
-		base_context & operator=( const base_context & ) = delete;
-
-	public:
-		base_context() = default;
-		virtual ~base_context() = default;
-
-	public:
-		virtual xui::window_id create_window( std::string_view title, xui::texture_id icon, const xui::rect & rect, xui::window_id parent = xui::invalid_id ) = 0;
-		virtual xui::window_id get_window_parent( xui::window_id id ) const = 0;
-		virtual void set_window_parent( xui::window_id id, xui::window_id parent ) = 0;
-		virtual xui::windowstatus get_window_status( xui::window_id id ) const = 0;
-		virtual void set_window_status( xui::window_id id, xui::windowstatus show ) = 0;
-		virtual xui::rect get_window_rect( xui::window_id id ) const = 0;
-		virtual void set_window_rect( xui::window_id id, const xui::rect & rect ) = 0;
-		virtual std::string get_window_title( xui::window_id id ) const = 0;
-		virtual void set_window_title( xui::window_id id, std::string_view title ) = 0;
-		virtual void remove_window( xui::window_id id ) = 0;
-
-	public:
-		virtual xui::font_id create_font( std::string_view filename ) = 0;
-		virtual void remove_font( xui::font_id id ) = 0;
-
-	public:
-		virtual xui::texture_id create_texture( std::string_view filename ) = 0;
-		virtual xui::size texture_size( xui::texture_id id ) const = 0;
-		virtual void remove_texture( xui::texture_id id ) = 0;
-	};
-
-	class draw_context : public base_context
+	class context
 	{
 	private:
 		struct private_p;
 
 	public:
-		draw_context( std::pmr::memory_resource * res = std::pmr::get_default_resource() );
-		~draw_context() override;
+		context( std::pmr::memory_resource * res = std::pmr::get_default_resource() );
+		~context();
+
+	private:
+		context( context && ) = delete;
+		context( const context & ) = delete;
+		context & operator=( context && ) = delete;
+		context & operator=( const context & ) = delete;
 
 	public:
-		static std::string dark_style();
-		static std::string light_style();
+		static std::string_view dark_style();
+		static std::string_view light_style();
 
 	public:
-		virtual void init();
-		virtual void release();
-
-	public:
-		void set_event( xui::window_id id, event key, int val );
+		void init( implement * impl );
+		void release();
 
 	public:
 		void set_scale( float factor );
 		void set_error( const xui::error_callback_type & callback );
 
 	public:
-		void push_style( std::string_view style );
+		void push_style( xui::style * style );
 		void pop_style();
 
 		void push_font( xui::font_id font );
@@ -453,7 +536,7 @@ namespace xui
 
 	public:
 		void begin();
-		std::span<xui::drawcommand> end();
+		std::span<xui::drawcmd> end();
 
 	public:
 		bool begin_window( std::string_view title, xui::texture_id icon, xui::window_flag flags = xui::window_flag::WINDOW_NONE );
@@ -512,10 +595,10 @@ namespace xui
 		void tableview_item();
 
 	public:
-		template<typename F> std::span<xui::drawcommand> draw( F && f )
+		template<typename F> std::span<xui::drawcmd> draw( F && f )
 		{
 			begin();
-			f( *this );
+			f();
 			return end();
 		}
 
@@ -546,17 +629,57 @@ namespace xui
 		}
 
 	private:
-		xui::drawcommand::text_element & draw_text( std::string_view text, const xui::rect & rect );
-		xui::drawcommand::line_element & draw_line( const xui::point & p1, const xui::point & p2 );
-		xui::drawcommand::rect_element & draw_rect( const xui::rect & rect );
-		xui::drawcommand::path_element & draw_path( std::string_view data = "" );
-		xui::drawcommand::image_element & draw_image( xui::texture_id id, const xui::rect & rect );
-		xui::drawcommand::circle_element & draw_circle( const xui::point & center, float radius );
-		xui::drawcommand::ellipse_element & draw_ellipse( const xui::point & center, const xui::point & radius );
-		xui::drawcommand::polygon_element & draw_polygon( std::span<xui::point> points );
+		xui::drawcmd::text_element & draw_text( std::string_view text, xui::font_id id, const xui::rect & rect );
+		xui::drawcmd::line_element & draw_line( const xui::point & p1, const xui::point & p2 );
+		xui::drawcmd::rect_element & draw_rect( const xui::rect & rect );
+		xui::drawcmd::path_element & draw_path( std::string_view data = "" );
+		xui::drawcmd::image_element & draw_image( xui::texture_id id, const xui::rect & rect );
+		xui::drawcmd::circle_element & draw_circle( const xui::point & center, float radius );
+		xui::drawcmd::ellipse_element & draw_ellipse( const xui::point & center, const xui::point & radius );
+		xui::drawcmd::polygon_element & draw_polygon( std::span<xui::point> points );
 
 	private:
 		private_p * _p;
+	};
+
+	class implement
+	{
+	private:
+		implement( implement && ) = delete;
+		implement( const implement & ) = delete;
+		implement & operator=( implement && ) = delete;
+		implement & operator=( const implement & ) = delete;
+
+	public:
+		implement() = default;
+		virtual ~implement() = default;
+
+	public:
+		virtual xui::window_id create_window( std::string_view title, xui::texture_id icon, const xui::rect & rect, xui::window_id parent = xui::invalid_id ) = 0;
+		virtual xui::window_id get_window_parent( xui::window_id id ) const = 0;
+		virtual void set_window_parent( xui::window_id id, xui::window_id parent ) = 0;
+		virtual xui::windowstatus get_window_status( xui::window_id id ) const = 0;
+		virtual void set_window_status( xui::window_id id, xui::windowstatus show ) = 0;
+		virtual xui::rect get_window_rect( xui::window_id id ) const = 0;
+		virtual void set_window_rect( xui::window_id id, const xui::rect & rect ) = 0;
+		virtual std::string get_window_title( xui::window_id id ) const = 0;
+		virtual void set_window_title( xui::window_id id, std::string_view title ) = 0;
+		virtual void remove_window( xui::window_id id ) = 0;
+
+	public:
+		virtual bool load_font_file( std::string_view filename ) = 0;
+		virtual xui::font_id create_font( std::string_view family, int size, xui::font_flag flag ) = 0;
+		virtual int font_hight( xui::font_id id ) const = 0;
+		virtual void remove_font( xui::font_id id ) = 0;
+
+	public:
+		virtual xui::texture_id create_texture( std::string_view filename ) = 0;
+		virtual xui::size texture_size( xui::texture_id id ) const = 0;
+		virtual void remove_texture( xui::texture_id id ) = 0;
+
+	public:
+		virtual int get_key( xui::window_id id, xui::event key ) const = 0;
+		virtual xui::point get_cursor_pos( xui::window_id id ) const = 0;
 	};
 
 	namespace system_resource

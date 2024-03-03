@@ -1,5 +1,6 @@
-#include "win_context.h"
+#include "gdi_implement.h"
 
+#include <array>
 #include <iomanip>
 #include <iostream>
 #include <Windows.h>
@@ -14,7 +15,9 @@ namespace
 {
     struct font
     {
-        std::string name;
+        int size;
+        std::string family;
+        xui::font_flag flag;
         Gdiplus::Font * font;
     };
     struct window
@@ -28,6 +31,30 @@ namespace
     {
         std::string name;
         Gdiplus::Image * image;
+    };
+    struct eventmap
+    {
+    public:
+        xui::point dt() const
+        {
+            return _cursorpos - _cursorold;
+        }
+        const xui::point & pos() const
+        {
+            return _cursorpos;
+        }
+        const xui::point & oldpos() const
+        {
+            return _cursorold;
+        }
+        int operator[]( int idx ) const
+        {
+            return _events[idx];
+        }
+
+    public:
+        xui::point _cursorpos = {}, _cursorold = {};
+        std::array<int, xui::event::EVENT_MAX_COUNT> _events = { 0 };
     };
 
     template<typename ... Ts> struct overload : Ts ... { using Ts::operator() ...; };
@@ -45,27 +72,29 @@ namespace
     }
 }
 
-struct win_context::private_p
+struct gdi_implement::private_p
 {
     HDC _hdc;
     ULONG_PTR _gditoken;
     std::vector<font> _fonts;
     std::vector<window> _windows;
     std::vector<texture> _textures;
-    Gdiplus::PrivateFontCollection font_collection;
+    Gdiplus::PrivateFontCollection _collection;
+    std::array<Gdiplus::FontFamily, 64> _familys;
+    std::map<xui::window_id, eventmap> _eventmap;
 };
 
-win_context::win_context( std::pmr::memory_resource * res )
-    : xui::draw_context( res ), _p( new private_p )
+gdi_implement::gdi_implement()
+    : _p( new private_p )
 {
 }
 
-win_context::~win_context()
+gdi_implement::~gdi_implement()
 {
     delete _p;
 }
 
-void win_context::init()
+void gdi_implement::init()
 {
     WNDCLASSEXA wc;
     wc.cbSize = sizeof( wc );
@@ -86,11 +115,9 @@ void win_context::init()
     Gdiplus::GdiplusStartup( &_p->_gditoken, &input, nullptr );
 
     _p->_hdc = CreateCompatibleDC( nullptr );
-
-    xui::draw_context::init();
 }
 
-void win_context::update( const std::function<std::span<xui::drawcommand>()> & paint )
+void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & paint )
 {
     MSG msg;
     while ( 1 )
@@ -227,10 +254,8 @@ void win_context::update( const std::function<std::span<xui::drawcommand>()> & p
     }
 }
 
-void win_context::release()
+void gdi_implement::release()
 {
-    xui::draw_context::release();
-
     for ( size_t i = 0; i < _p->_windows.size(); i++ )
         remove_window( i );
     _p->_windows.clear();
@@ -248,7 +273,7 @@ void win_context::release()
     UnregisterClassA( "XUIClass", GetModuleHandleA( nullptr ) );
 }
 
-xui::window_id win_context::create_window( std::string_view title, xui::texture_id icon, const xui::rect & rect, xui::window_id parent )
+xui::window_id gdi_implement::create_window( std::string_view title, xui::texture_id icon, const xui::rect & rect, xui::window_id parent )
 {
     xui::window_id id = 0;
     for ( size_t i = 0; i < _p->_windows.size(); i++ )
@@ -288,7 +313,7 @@ xui::window_id win_context::create_window( std::string_view title, xui::texture_
     return id;
 }
 
-xui::window_id win_context::get_window_parent( xui::window_id id ) const
+xui::window_id gdi_implement::get_window_parent( xui::window_id id ) const
 {
     if ( id >= _p->_windows.size() )
         return xui::invalid_id;
@@ -309,7 +334,7 @@ xui::window_id win_context::get_window_parent( xui::window_id id ) const
     return xui::invalid_id;
 }
 
-void win_context::set_window_parent( xui::window_id id, xui::window_id parent )
+void gdi_implement::set_window_parent( xui::window_id id, xui::window_id parent )
 {
     if ( id >= _p->_windows.size() )
         return;
@@ -317,7 +342,7 @@ void win_context::set_window_parent( xui::window_id id, xui::window_id parent )
     SetParent( _p->_windows[id].hwnd, parent == xui::invalid_id ? nullptr : _p->_windows[parent].hwnd );
 }
 
-xui::windowstatus win_context::get_window_status( xui::window_id id ) const
+xui::windowstatus gdi_implement::get_window_status( xui::window_id id ) const
 {
     int status = 0;
 
@@ -341,7 +366,7 @@ xui::windowstatus win_context::get_window_status( xui::window_id id ) const
     return xui::windowstatus( status );
 }
 
-void win_context::set_window_status( xui::window_id id, xui::windowstatus show )
+void gdi_implement::set_window_status( xui::window_id id, xui::windowstatus show )
 {
     if ( id >= _p->_windows.size() )
         return;
@@ -395,7 +420,7 @@ void win_context::set_window_status( xui::window_id id, xui::windowstatus show )
     }
 }
 
-xui::rect win_context::get_window_rect( xui::window_id id ) const
+xui::rect gdi_implement::get_window_rect( xui::window_id id ) const
 {
     if ( id >= _p->_windows.size() )
         return {};
@@ -403,7 +428,7 @@ xui::rect win_context::get_window_rect( xui::window_id id ) const
     return _p->_windows[id].rect;
 }
 
-void win_context::set_window_rect( xui::window_id id, const xui::rect & rect )
+void gdi_implement::set_window_rect( xui::window_id id, const xui::rect & rect )
 {
     if ( id >= _p->_windows.size() )
         return;
@@ -416,7 +441,7 @@ void win_context::set_window_rect( xui::window_id id, const xui::rect & rect )
     SetWindowPos( _p->_windows[id].hwnd, HWND_BOTTOM, _p->_windows[id].rect.x, _p->_windows[id].rect.y, _p->_windows[id].rect.w, _p->_windows[id].rect.h, SWP_NOZORDER );
 }
 
-std::string win_context::get_window_title( xui::window_id id ) const
+std::string gdi_implement::get_window_title( xui::window_id id ) const
 {
     if ( id >= _p->_windows.size() )
         return {};
@@ -429,7 +454,7 @@ std::string win_context::get_window_title( xui::window_id id ) const
     return {};
 }
 
-void win_context::set_window_title( xui::window_id id, std::string_view title )
+void gdi_implement::set_window_title( xui::window_id id, std::string_view title )
 {
     if ( id >= _p->_windows.size() )
         return;
@@ -440,7 +465,7 @@ void win_context::set_window_title( xui::window_id id, std::string_view title )
     SetWindowTextA( _p->_windows[id].hwnd, buf );
 }
 
-void win_context::remove_window( xui::window_id id )
+void gdi_implement::remove_window( xui::window_id id )
 {
     if ( id >= _p->_windows.size() )
         return;
@@ -451,7 +476,19 @@ void win_context::remove_window( xui::window_id id )
     _p->_windows[id].hwnd = nullptr;
 }
 
-xui::font_id win_context::create_font( std::string_view filename )
+bool gdi_implement::load_font_file( std::string_view filename )
+{
+    auto path = ansi_wide( filename );
+    if ( _p->_collection.AddFontFile( path.c_str() ) == Gdiplus::Status::Ok )
+    {
+        INT found = 0;
+        INT count = min( 100, _p->_collection.GetFamilyCount() );
+        return _p->_collection.GetFamilies( count, _p->_familys.data(), &found ) == Gdiplus::Status::Ok;
+    }
+    return false;
+}
+
+xui::font_id gdi_implement::create_font( std::string_view family, int size, xui::font_flag flag )
 {
     xui::font_id id = xui::invalid_id;
 
@@ -471,39 +508,51 @@ xui::font_id win_context::create_font( std::string_view filename )
 
     font fnt;
 
-    fnt.name = filename;
-    if ( filename == xui::system_resource::FONT_DEFAULT )
+    fnt.size = size;
+    fnt.flag = flag;
+    fnt.family = family;
+    if ( family == xui::system_resource::FONT_DEFAULT )
     {
-        Gdiplus::FontCollection c;
-        fnt.font = new Gdiplus::Font( L"ËÎÌו", 16, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel );
+        fnt.font = new Gdiplus::Font( L"ËÎÌו", size, flag, Gdiplus::UnitPixel );
+        _p->_fonts[id] = fnt;
+        return id;
     }
-    else
+
+    auto wfamily = ansi_wide( family );
+
+    for ( auto & it : _p->_familys )
     {
-        auto path = ansi_wide( filename );
-        Gdiplus::Status status = _p->font_collection.AddFontFile( path.c_str() );
-        if ( status == Gdiplus::Status::Ok )
+        if ( it.IsAvailable() )
         {
-            auto count = _p->font_collection.GetFamilyCount();
-            INT num;
-            Gdiplus::FontFamily family;
-            status = _p->font_collection.GetFamilies( count - 1, &family, &num );
-            if ( status == Gdiplus::Status::Ok )
+            wchar_t buf[64];
+            memset( buf, 0, sizeof( wchar_t ) * 64 );
+            if ( it.GetFamilyName( buf ) == Gdiplus::Ok )
             {
-                // https://learn.microsoft.com/zh-cn/windows/win32/gdiplus/-gdiplus-creating-a-private-font-collection-use
+                if ( wfamily == buf && it.IsStyleAvailable( flag ) )
+                {
+                    fnt.font = new Gdiplus::Font( wfamily.c_str(), size, flag, Gdiplus::UnitPixel, &_p->_collection );
+                    _p->_fonts[id] = fnt;
+                    return id;
+                }
             }
         }
-
-        return xui::invalid_id;
-        Gdiplus::Font;
-        // fnt.font = CreateFontA();
     }
 
-    _p->_fonts[id] = fnt;
-
-    return id;
+    return xui::invalid_id;
 }
 
-void win_context::remove_font( xui::font_id id )
+int gdi_implement::font_hight( xui::font_id id ) const
+{
+    if ( id >= _p->_fonts.size() )
+        return 0;
+
+    Gdiplus::FontFamily family;
+    _p->_fonts[id].font->GetFamily( &family );
+
+    return family.GetEmHeight( _p->_fonts[id].font->GetStyle() );
+}
+
+void gdi_implement::remove_font( xui::font_id id )
 {
     if ( id >= _p->_fonts.size() )
         return;
@@ -513,7 +562,7 @@ void win_context::remove_font( xui::font_id id )
     _p->_fonts[id].font = nullptr;
 }
 
-xui::texture_id win_context::create_texture( std::string_view filename )
+xui::texture_id gdi_implement::create_texture( std::string_view filename )
 {
     auto it = std::find_if( _p->_textures.begin(), _p->_textures.end(), [&]( const texture & val )
     {
@@ -563,7 +612,7 @@ xui::texture_id win_context::create_texture( std::string_view filename )
     return id;
 }
 
-xui::size win_context::texture_size( xui::texture_id id ) const
+xui::size gdi_implement::texture_size( xui::texture_id id ) const
 {
     if ( id >= _p->_textures.size() )
         return {};
@@ -571,7 +620,7 @@ xui::size win_context::texture_size( xui::texture_id id ) const
     return { (float)_p->_textures[id].image->GetWidth(), (float)_p->_textures[id].image->GetHeight() };
 }
 
-void win_context::remove_texture( xui::texture_id id )
+void gdi_implement::remove_texture( xui::texture_id id )
 {
     if ( id >= _p->_textures.size() )
         return;
@@ -581,7 +630,50 @@ void win_context::remove_texture( xui::texture_id id )
     _p->_textures[id].image = nullptr;
 }
 
-void win_context::present()
+void gdi_implement::set_event( xui::window_id id, xui::event key, int val )
+{
+    if ( id != xui::invalid_id )
+    {
+        if ( key > xui::event::WINDOW_EVENT_BEG && key <= xui::event::WINDOW_EVENT_END )
+        {
+            if ( key == xui::event::WINDOW_CLOSE )
+            {
+                _p->_eventmap.erase( id );
+            }
+        }
+        else if ( key > xui::event::MOUSE_EVENT_BEG && key <= xui::event::MOUSE_EVENT_END )
+        {
+            switch ( key )
+            {
+            case xui::event::MOUSE_MOVE:
+                _p->_eventmap[id]._cursorold = _p->_eventmap[id]._cursorpos;
+                _p->_eventmap[id]._cursorpos = { (float)( val & 0xFFFF ), (float)( ( val >> 16 ) & 0xFFFF ) };
+                break;
+            }
+
+            _p->_eventmap[id]._events[key] = val;
+        }
+        else if ( key > xui::event::KEY_EVENT_BEG && key <= xui::event::KEY_EVENT_END )
+        {
+            if ( val == 0 )
+                _p->_eventmap[id]._events[key] = val;
+            else
+                _p->_eventmap[id]._events[key] += val;
+        }
+    }
+}
+
+int gdi_implement::get_key( xui::window_id id, xui::event key ) const
+{
+    return _p->_eventmap[id][key];
+}
+
+xui::point gdi_implement::get_cursor_pos( xui::window_id id ) const
+{
+    return _p->_eventmap[id].pos();
+}
+
+void gdi_implement::present()
 {
     for ( size_t id = 0; id < _p->_windows.size(); id++ )
     {
@@ -602,7 +694,7 @@ void win_context::present()
     }
 }
 
-void win_context::render( std::span<xui::drawcommand> cmds )
+void gdi_implement::render( std::span<xui::drawcmd> cmds )
 {
     HGDIOBJ old_obj = nullptr;
     xui::window_id id = xui::invalid_id;
@@ -623,7 +715,7 @@ void win_context::render( std::span<xui::drawcommand> cmds )
             {
 
             },
-            [&]( const xui::drawcommand::text_element & element )
+            [&]( const xui::drawcmd::text_element & element )
             {
                 Gdiplus::Graphics g( _p->_hdc );
                 g.SetSmoothingMode( Gdiplus::SmoothingModeHighQuality );
@@ -650,7 +742,7 @@ void win_context::render( std::span<xui::drawcommand> cmds )
 
                 g.DrawString( wtext.c_str(), wtext.size(), _p->_fonts[element.font].font, Gdiplus::RectF( element.rect.x, element.rect.y, element.rect.w, element.rect.h ), &fmt, &brush );
             },
-            [&]( const xui::drawcommand::line_element & element )
+            [&]( const xui::drawcmd::line_element & element )
             {
                 Gdiplus::Graphics g( _p->_hdc );
                 g.SetSmoothingMode( Gdiplus::SmoothingModeHighQuality );
@@ -659,7 +751,7 @@ void win_context::render( std::span<xui::drawcommand> cmds )
 
                 g.DrawLine( &pen, Gdiplus::PointF{ element.p1.x, element.p1.y }, Gdiplus::PointF{ element.p2.x, element.p2.y } );
             },
-            [&]( const xui::drawcommand::rect_element & element )
+            [&]( const xui::drawcmd::rect_element & element )
             {
                 Gdiplus::Graphics g( _p->_hdc );
                 g.SetSmoothingMode( Gdiplus::SmoothingModeHighQuality );
@@ -693,7 +785,7 @@ void win_context::render( std::span<xui::drawcommand> cmds )
                 Gdiplus::Pen pen( Gdiplus::Color( element.border.color.a, element.border.color.r, element.border.color.g, element.border.color.b ), element.border.width );
                 g.DrawPath( &pen, &path );
             },
-            [&]( const xui::drawcommand::path_element & element )
+            [&]( const xui::drawcmd::path_element & element )
             {
                 Gdiplus::Graphics g( _p->_hdc );
                 g.SetSmoothingMode( Gdiplus::SmoothingModeHighQuality );
@@ -772,14 +864,14 @@ void win_context::render( std::span<xui::drawcommand> cmds )
 
                 g.DrawPath( &pen, &path );
             },
-            [&]( const xui::drawcommand::image_element & element )
+            [&]( const xui::drawcmd::image_element & element )
             {
                 Gdiplus::Graphics g( _p->_hdc );
                 g.SetSmoothingMode( Gdiplus::SmoothingModeHighQuality );
 
                 g.DrawImage( _p->_textures[element.id].image, Gdiplus::RectF( element.rect.x, element.rect.y, element.rect.w, element.rect.h ) );
             },
-            [&]( const xui::drawcommand::circle_element & element )
+            [&]( const xui::drawcmd::circle_element & element )
             {
                 Gdiplus::Graphics g( _p->_hdc );
                 g.SetSmoothingMode( Gdiplus::SmoothingModeHighQuality );
@@ -793,7 +885,7 @@ void win_context::render( std::span<xui::drawcommand> cmds )
                 Gdiplus::Pen pen( Gdiplus::Color( element.border.color.a, element.border.color.r, element.border.color.g, element.border.color.b ), element.border.width );
                 g.DrawEllipse( &pen, element.center.x - element.radius, element.center.y - element.radius, element.radius * 2, element.radius * 2 );
             },
-            [&]( const xui::drawcommand::ellipse_element & element )
+            [&]( const xui::drawcmd::ellipse_element & element )
             {
                 Gdiplus::Graphics g( _p->_hdc );
                 g.SetSmoothingMode( Gdiplus::SmoothingModeHighQuality );
@@ -807,7 +899,7 @@ void win_context::render( std::span<xui::drawcommand> cmds )
                 Gdiplus::Pen pen( Gdiplus::Color( element.border.color.a, element.border.color.r, element.border.color.g, element.border.color.b ), element.border.width );
                 g.DrawEllipse( &pen, element.center.x - element.radius.x, element.center.y - element.radius.y, element.radius.x * 2, element.radius.y * 2 );
             },
-            [&]( const xui::drawcommand::polygon_element & element )
+            [&]( const xui::drawcmd::polygon_element & element )
             {
                 Gdiplus::Graphics g( _p->_hdc );
                 g.SetSmoothingMode( Gdiplus::SmoothingModeHighQuality );
@@ -834,4 +926,24 @@ void win_context::render( std::span<xui::drawcommand> cmds )
     if ( old_obj != nullptr ) SelectObject( _p->_hdc, old_obj );
 
     present();
+
+    for ( auto & it : _p->_eventmap )
+    {
+        for ( int i = 0; i < it.second._events.size(); i++ )
+        {
+            if ( i > xui::event::WINDOW_EVENT_BEG && i <= xui::event::WINDOW_EVENT_END )
+            {
+                it.second._events[i] = 0;
+            }
+            else if ( i > xui::event::MOUSE_EVENT_BEG && i <= xui::event::MOUSE_EVENT_END )
+            {
+                if ( i == xui::event::MOUSE_WHEEL )
+                    it.second._events[i] = 0;
+            }
+            else if ( i > xui::event::KEY_EVENT_BEG && i <= xui::event::KEY_EVENT_END )
+            {
+                it.second._events[i] = max( it.second._events[i] - 1, 0 );
+            }
+        }
+    }
 }

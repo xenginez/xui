@@ -2,7 +2,7 @@
 
 project ("xui")
 
-add_executable (xui "src/main.cpp" "src/xui.cpp" "src/win_context.cpp")
+add_executable (xui "src/main.cpp" "src/xui.cpp" "src/gdi_implement.cpp")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET xui PROPERTY CXX_STANDARD 20)
