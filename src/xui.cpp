@@ -707,6 +707,15 @@ R"(
     slider{
     },
     process{
+        border-color: white;
+        background-color: rgb(94, 92, 91);
+    },
+    process-text{
+        stroke-color: white;
+    },
+    process-cursor{
+        border-color: transparent;
+        background-color: red;
     },
     textedit{
     },
@@ -1057,14 +1066,14 @@ void xui::context::end_window()
     pop_rect();
 }
 
-void xui::context::label( std::string_view text )
-{
-    draw_type( "label", [&]() { draw_text( text, current_font(), currrent_rect() ); } );
-}
-
 void xui::context::image( xui::texture_id id )
 {
     draw_type( "image", [&]() { draw_image( id, currrent_rect() ); } );
+}
+
+void xui::context::label( std::string_view text )
+{
+    draw_type( "label", [&]() { draw_text( text, current_font(), currrent_rect() ); } );
 }
 
 bool xui::context::button( std::string_view text )
@@ -1096,6 +1105,28 @@ bool xui::context::button( std::string_view text )
     } );
 
     return ( _p->_impl->get_key( id, xui::event::KEY_MOUSE_LEFT) && rect.contains( _p->_impl->get_cursor_pos( id ) ) );
+}
+
+void xui::context::process( float value, std::string_view text )
+{
+    draw_type( "process", [&]()
+    {
+        auto background_rect = currrent_rect();
+
+        draw_rect( background_rect );
+
+        draw_element( "cursor", [&]()
+        {
+            xui::rect cursor_rect = { background_rect.x, background_rect.y, background_rect.w * value, background_rect.h };
+
+            draw_rect( cursor_rect );
+        } );
+
+        if ( !text.empty() )
+        {
+            draw_element( "text", [&]() { draw_text( text, current_font(), background_rect ); } );
+        }
+    } );
 }
 
 void xui::context::push_type( std::string_view type )

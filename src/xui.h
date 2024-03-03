@@ -20,6 +20,7 @@ namespace xui
 	class drawcmd;
 	class context;
 	class implement;
+	class textedit_state;
 
 	enum err
 	{
@@ -119,6 +120,13 @@ namespace xui
 		WINDOW_EVENT_END = WINDOW_CLOSE,
 
 		EVENT_MAX_COUNT,
+	};
+	enum direction
+	{
+		LEFT_RIGHT,
+		RIGHT_LEFT,
+		TOP_BOTTOM,
+		BOTTOM_TOP,
 	};
 	enum orientation
 	{
@@ -543,11 +551,11 @@ namespace xui
 		void end_window();
 
 	public:
-		void label( std::string_view text );
 		void image( xui::texture_id id );
+		void label( std::string_view text );
 		bool button( std::string_view text );
-		void process();
-		bool textedit();
+		void process(float value, std::string_view text = "" );
+		bool textedit( textedit_state * state );
 
 	public:
 		bool slider_int();
@@ -680,6 +688,11 @@ namespace xui
 	public:
 		virtual int get_key( xui::window_id id, xui::event key ) const = 0;
 		virtual xui::point get_cursor_pos( xui::window_id id ) const = 0;
+	};
+
+	class textedit_state
+	{
+
 	};
 
 	namespace system_resource

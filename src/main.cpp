@@ -42,6 +42,10 @@ int main()
 						std::cout << "¹º·¿¼Û¿î clicked" << std::endl;
 					}
 					ctx.pop_rect();
+
+					ctx.push_rect( { 100, 200, 100, 30 } );
+					ctx.process( 0.5f, "50%" );
+					ctx.pop_rect();
 				}
 				ctx.end_window();
 			}
