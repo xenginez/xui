@@ -541,15 +541,20 @@ xui::font_id gdi_implement::create_font( std::string_view family, int size, xui:
     return xui::invalid_id;
 }
 
-int gdi_implement::font_hight( xui::font_id id ) const
+xui::size gdi_implement::font_size( xui::font_id id, std::string_view text ) const
 {
-    if ( id >= _p->_fonts.size() )
-        return 0;
+    Gdiplus::StringFormat fmt;
+    fmt.SetAlignment( Gdiplus::StringAlignment::StringAlignmentNear );
+    fmt.SetLineAlignment( Gdiplus::StringAlignment::StringAlignmentNear );
 
-    Gdiplus::FontFamily family;
-    _p->_fonts[id].font->GetFamily( &family );
+    Gdiplus::RectF stringRect;
+    Gdiplus::RectF layoutRect( 0, 0, 600, 100 );
 
-    return family.GetEmHeight( _p->_fonts[id].font->GetStyle() );
+    auto str = ansi_wide( text );
+    Gdiplus::Graphics g( _p->_hdc );
+    g.MeasureString( str.c_str(), str.size(), _p->_fonts[id].font, layoutRect, &fmt, &stringRect );
+
+    return { stringRect.Width, stringRect.Height };
 }
 
 void gdi_implement::remove_font( xui::font_id id )

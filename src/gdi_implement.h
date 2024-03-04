@@ -31,7 +31,7 @@ public:
 public:
 	bool load_font_file( std::string_view filename ) override;
 	xui::font_id create_font( std::string_view family, int size, xui::font_flag flag ) override;
-	int font_hight( xui::font_id id ) const override;
+	xui::size font_size( xui::font_id id, std::string_view text ) const override;
 	void remove_font( xui::font_id id ) override;
 
 public:

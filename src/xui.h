@@ -169,7 +169,14 @@ namespace xui
 	};
 	enum textedit_flag
 	{
-
+		TEXTEDIT_NONE				= 0,
+		TEXTEDIT_DEC				= 1 << 0,	// allow 0123456789.+-*/
+		TEXTEDIT_HEX				= 1 << 1,	// allow 0123456789ABCDEFabcdef
+		TEXTEDIT_PASSWORD			= 1 << 2,	// password mode, display all characters as '*'
+		TEXTEDIT_OVERWRITE			= 1 << 3,	// overwrite mode
+		TEXTEDIT_READONLY			= 1 << 4,	// read-only mode
+		TEXTEDIT_WORDWARP			= 1 << 5,	// auto word warp
+		TEXTEDIT_NORECALL			= 1 << 6,	// disable undo/redo.
 	};
 	enum modifier_flag
 	{
@@ -198,6 +205,7 @@ namespace xui
 	static constexpr const std::size_t invalid_id = std::numeric_limits<std::size_t>::max();
 
 	using error_callback_type = std::function<void( const context *, std::error_code )>;
+	using text_edit_callback_type = std::function<bool( const context *, textedit_state * )>;
 	using item_data_callback_type = std::function<std::string_view( const context *, int row, int col )>;
 
 	class size
@@ -517,6 +525,7 @@ namespace xui
 	public:
 		void push_style( xui::style * style );
 		void pop_style();
+		xui::style::variant current_style( std::string_view attr );
 
 		void push_font( xui::font_id font );
 		void pop_font();
@@ -555,7 +564,7 @@ namespace xui
 		void label( std::string_view text );
 		bool button( std::string_view text );
 		void process(float value, std::string_view text = "" );
-		bool textedit( textedit_state * state );
+		bool textedit( xui::textedit_state * state, const text_edit_callback_type & callback );
 
 	public:
 		bool slider_int();
@@ -636,7 +645,7 @@ namespace xui
 			pop_action();
 		}
 
-	private:
+	protected:
 		xui::drawcmd::text_element & draw_text( std::string_view text, xui::font_id id, const xui::rect & rect );
 		xui::drawcmd::line_element & draw_line( const xui::point & p1, const xui::point & p2 );
 		xui::drawcmd::rect_element & draw_rect( const xui::rect & rect );
@@ -677,7 +686,7 @@ namespace xui
 	public:
 		virtual bool load_font_file( std::string_view filename ) = 0;
 		virtual xui::font_id create_font( std::string_view family, int size, xui::font_flag flag ) = 0;
-		virtual int font_hight( xui::font_id id ) const = 0;
+		virtual xui::size font_size( xui::font_id id, std::string_view text ) const = 0;
 		virtual void remove_font( xui::font_id id ) = 0;
 
 	public:
@@ -692,7 +701,17 @@ namespace xui
 
 	class textedit_state
 	{
+		int input = 0;
+		bool cap = false;
+		bool alt = false;
+		bool ctrl = false;
+		bool shift = false;
 
+		int cursor_pos = -1;
+		std::string::iterator select_beg, select_end;
+
+		std::string buffer;
+		xui::textedit_flag flag = xui::TEXTEDIT_NONE;
 	};
 
 	namespace system_resource

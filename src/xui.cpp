@@ -578,29 +578,6 @@ public:
     }
 
 public:
-    xui::style::variant find_style( std::string_view attr ) const
-    {
-        std::string name{ _types.back() };
-
-        if ( !_ids.empty() )
-        {
-            name.append( "#" );
-            name.append( _ids.back() );
-        }
-        name.append( "@" );
-        name.append( attr );
-
-        for ( auto it = _styles.rbegin(); it != _styles.rend(); ++it )
-        {
-            auto val = ( *it )->find( name );
-            if ( val.index() != 0 )
-                return val;
-        }
-
-        return {};
-    }
-
-public:
     float _factor = 1.0f;
     xui::implement * _impl = nullptr;
     error_callback_type _error = nullptr;
@@ -800,6 +777,28 @@ void xui::context::push_style( xui::style * style )
 void xui::context::pop_style()
 {
     _p->_styles.pop_back();
+}
+
+xui::style::variant xui::context::current_style( std::string_view attr )
+{
+    std::string name{ _p->_types.back() };
+
+    if ( !_p->_ids.empty() )
+    {
+        name.append( "#" );
+        name.append( _p->_ids.back() );
+    }
+    name.append( "@" );
+    name.append( attr );
+
+    for ( auto it = _p->_styles.rbegin(); it != _p->_styles.rend(); ++it )
+    {
+        auto val = ( *it )->find( name );
+        if ( val.index() != 0 )
+            return val;
+    }
+
+    return {};
 }
 
 void xui::context::push_font( xui::font_id font )
@@ -1129,6 +1128,13 @@ void xui::context::process( float value, std::string_view text )
     } );
 }
 
+bool xui::context::textedit( xui::textedit_state * state, const text_edit_callback_type & callback )
+{
+
+
+    return false;
+}
+
 void xui::context::push_type( std::string_view type )
 {
     _p->_types.push_back( { type.begin(), type.end() } );
@@ -1166,8 +1172,8 @@ xui::drawcmd::text_element & xui::context::draw_text( std::string_view text, xui
     element.font = id;
     element.text = text;
     element.rect = rect;
-    element.color = _p->find_style( "stroke-color" ).value<xui::color>();
-    element.align = _p->find_style( "text-align" ).value<xui::alignment_flag>( xui::alignment_flag::CENTER );
+    element.color = current_style( "stroke-color" ).value<xui::color>();
+    element.align = current_style( "text-align" ).value<xui::alignment_flag>( xui::alignment_flag::CENTER );
 
     _p->_commands.push_back( { current_window(), element } );
 
@@ -1180,9 +1186,9 @@ xui::drawcmd::line_element & xui::context::draw_line( const xui::point & p1, con
 
     element.p1 = p1;
     element.p2 = p2;
-    element.stroke.style = _p->find_style( "stroke-style" ).value<int>( xui::drawcmd::stroke::SOLID );
-    element.stroke.width = _p->find_style( "stroke-width" ).value<float>( 1.0f );
-    element.stroke.color = _p->find_style( "stroke-color" ).value<xui::color>();
+    element.stroke.style = current_style( "stroke-style" ).value<int>( xui::drawcmd::stroke::SOLID );
+    element.stroke.width = current_style( "stroke-width" ).value<float>( 1.0f );
+    element.stroke.color = current_style( "stroke-color" ).value<xui::color>();
 
     _p->_commands.push_back( { current_window(), element } );
 
@@ -1194,11 +1200,11 @@ xui::drawcmd::rect_element & xui::context::draw_rect( const xui::rect & rect )
     xui::drawcmd::rect_element element;
 
     element.rect = rect;
-    element.border.style = _p->find_style( "border-style" ).value<int>( xui::drawcmd::stroke::SOLID );
-    element.border.width = _p->find_style( "border-width" ).value<float>( 1.0f );
-    element.border.color = _p->find_style( "border-color" ).value<xui::color>();
-    element.border.radius = _p->find_style( "border-radius" ).value<xui::vec4>();
-    element.filled.color = _p->find_style( "background-color" ).value<xui::color>();
+    element.border.style = current_style( "border-style" ).value<int>( xui::drawcmd::stroke::SOLID );
+    element.border.width = current_style( "border-width" ).value<float>( 1.0f );
+    element.border.color = current_style( "border-color" ).value<xui::color>();
+    element.border.radius = current_style( "border-radius" ).value<xui::vec4>();
+    element.filled.color = current_style( "background-color" ).value<xui::color>();
 
     _p->_commands.push_back( { current_window(), element } );
 
@@ -1210,10 +1216,10 @@ xui::drawcmd::path_element & xui::context::draw_path( std::string_view data )
     xui::drawcmd::path_element element;
 
     element.data = data;
-    element.stroke.style = _p->find_style( "stroke-style" ).value<int>( xui::drawcmd::stroke::SOLID );
-    element.stroke.width = _p->find_style( "stroke-width" ).value<float>( 1.0f );
-    element.stroke.color = _p->find_style( "stroke-color" ).value<xui::color>();
-    element.filled.color = _p->find_style( "background-color" ).value<xui::color>();
+    element.stroke.style = current_style( "stroke-style" ).value<int>( xui::drawcmd::stroke::SOLID );
+    element.stroke.width = current_style( "stroke-width" ).value<float>( 1.0f );
+    element.stroke.color = current_style( "stroke-color" ).value<xui::color>();
+    element.filled.color = current_style( "background-color" ).value<xui::color>();
 
     _p->_commands.push_back( { current_window(), element } );
 
