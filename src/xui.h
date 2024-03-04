@@ -20,7 +20,7 @@ namespace xui
 	class drawcmd;
 	class context;
 	class implement;
-	class textedit_state;
+	class textedit_base;
 
 	enum err
 	{
@@ -51,6 +51,7 @@ namespace xui
 		KEY_A, KEY_B, KEY_C, KEY_D, KEY_E, KEY_F, KEY_G, KEY_H, KEY_I, KEY_J,
 		KEY_K, KEY_L, KEY_M, KEY_N, KEY_O, KEY_P, KEY_Q, KEY_R, KEY_S, KEY_T,
 		KEY_U, KEY_V, KEY_W, KEY_X, KEY_Y, KEY_Z,
+		KEY_UNICODE,
 		KEY_F1, KEY_F2, KEY_F3, KEY_F4, KEY_F5, KEY_F6,
 		KEY_F7, KEY_F8, KEY_F9, KEY_F10, KEY_F11, KEY_F12,
 		KEY_F13, KEY_F14, KEY_F15, KEY_F16, KEY_F17, KEY_F18,
@@ -167,26 +168,6 @@ namespace xui
 		WINDOW_NO_MINIMIZEBOX				= 1 << 9,
 		WINDOW_NO_MAXIMIZEBOX				= 1 << 10,
 	};
-	enum textedit_flag
-	{
-		TEXTEDIT_NONE				= 0,
-		TEXTEDIT_DEC				= 1 << 0,	// allow 0123456789.+-*/
-		TEXTEDIT_HEX				= 1 << 1,	// allow 0123456789ABCDEFabcdef
-		TEXTEDIT_PASSWORD			= 1 << 2,	// password mode, display all characters as '*'
-		TEXTEDIT_OVERWRITE			= 1 << 3,	// overwrite mode
-		TEXTEDIT_READONLY			= 1 << 4,	// read-only mode
-		TEXTEDIT_WORDWARP			= 1 << 5,	// auto word warp
-		TEXTEDIT_NORECALL			= 1 << 6,	// disable undo/redo.
-	};
-	enum modifier_flag
-	{
-		MODIFIER_NONE			= 0,
-		MODIFIER_ALT			= 1 << 0,
-		MODIFIER_CTRL			= 1 << 1,
-		MODIFIER_SHIFT			= 1 << 2,
-		MODIFIER_SUPER			= 1 << 3,
-		MODIFIER_KEYPAD			= 1 << 4,
-	};
 	enum alignment_flag
 	{
 		LEFT		= 1 << 0,
@@ -205,7 +186,6 @@ namespace xui
 	static constexpr const std::size_t invalid_id = std::numeric_limits<std::size_t>::max();
 
 	using error_callback_type = std::function<void( const context *, std::error_code )>;
-	using text_edit_callback_type = std::function<bool( const context *, textedit_state * )>;
 	using item_data_callback_type = std::function<std::string_view( const context *, int row, int col )>;
 
 	class size
@@ -564,7 +544,7 @@ namespace xui
 		void label( std::string_view text );
 		bool button( std::string_view text );
 		void process(float value, std::string_view text = "" );
-		bool textedit( xui::textedit_state * state, const text_edit_callback_type & callback );
+		bool textedit( xui::textedit_base * state, std::string_view hint = "" );
 
 	public:
 		bool slider_int();
@@ -699,19 +679,55 @@ namespace xui
 		virtual xui::point get_cursor_pos( xui::window_id id ) const = 0;
 	};
 
-	class textedit_state
+	class textedit_base
 	{
-		int input = 0;
-		bool cap = false;
-		bool alt = false;
-		bool ctrl = false;
-		bool shift = false;
+		friend class context;
 
-		int cursor_pos = -1;
-		std::string::iterator select_beg, select_end;
+	public:
+		virtual bool input( int pos, xui::event event, std::string_view unicode, bool cap, bool alt, bool ctrl, bool shift ) = 0;
+		virtual void duplicate( int beg, int end ) = 0;
+		virtual void paste( int pos ) = 0;
+		virtual void remove( int beg, int end ) = 0;
 
-		std::string buffer;
-		xui::textedit_flag flag = xui::TEXTEDIT_NONE;
+	public:
+		virtual int row_count() const = 0;
+		virtual int row_index( int pos ) const = 0;
+		virtual int row_beg_pos( int row ) const = 0;
+		virtual int row_end_pos( int row ) const = 0;
+		virtual std::string_view row_data( int row ) const = 0;
+
+	public:
+		virtual int string_count() const = 0;
+		virtual std::string_view string_data( int beg, int end ) const = 0;
+
+	private:
+		int _pos = 0;
+		int _row_beg = 0, _row_end = 0;
+		int _select_beg = 0, _select_end = 0;
+	};
+
+	class textedit_state : public textedit_base
+	{
+	public:
+		enum flag
+		{
+			TEXTEDIT_NONE				= 0,
+			TEXTEDIT_DEC				= 1 << 0,							// allow 0123456789.+-*/
+			TEXTEDIT_HEX				= 1 << 1,							// allow 0123456789ABCDEFabcdef
+			TEXTEDIT_PASSWORD			= 1 << 2,							// password mode, display all characters as '*'
+			TEXTEDIT_READONLY			= 1 << 3,							// read-only mode
+			TEXTEDIT_NORECALL			= 1 << 4,							// disable undo/redo.
+			TEXTEDIT_MULTILINE			= 1 << 5,							// multi line.
+			TEXTEDIT_WORD_WARP			= ( 1 << 6 ) | TEXTEDIT_MULTILINE,	// auto word warp
+		};
+
+	public:
+		textedit_state( std::string_view text = "", textedit_state::flag flags = TEXTEDIT_NONE, std::pmr::memory_resource * resource = std::pmr::get_default_resource() );
+
+	private:
+		flag _flags;
+		std::string _buffer;
+		std::string _duplicate;
 	};
 
 	namespace system_resource

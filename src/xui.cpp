@@ -694,7 +694,7 @@ R"(
         border-color: transparent;
         background-color: red;
     },
-    textedit{
+    textedit_base{
     },
     button{
         border-color: black;
@@ -1128,7 +1128,7 @@ void xui::context::process( float value, std::string_view text )
     } );
 }
 
-bool xui::context::textedit( xui::textedit_state * state, const text_edit_callback_type & callback )
+bool xui::context::textedit( xui::textedit_base * state, std::string_view hint )
 {
 
 
