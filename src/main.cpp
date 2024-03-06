@@ -43,8 +43,15 @@ int main()
 					}
 					ctx.pop_rect();
 
+					static int cur = 0;
+					cur = ( cur + 1 ) % 100;
+
 					ctx.push_rect( { 100, 200, 100, 30 } );
-					ctx.process( 0.5f, "50%" );
+					ctx.process( cur / 100.0f );
+					ctx.pop_rect();
+
+					ctx.push_rect( { 100, 240, 100, 30 } );
+					ctx.slider_int( &cur, 1, 0, 100 );
 					ctx.pop_rect();
 				}
 				ctx.end_window();

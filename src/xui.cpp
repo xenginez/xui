@@ -27,8 +27,54 @@ template<> struct std::formatter< std::span<std::string_view, std::dynamic_exten
 
 namespace
 {
-    static std::regex float_regex{ R"([-+]?([0-9]*.[0-9]+|[0-9]+))" };
-    static std::map<std::string_view, std::uint32_t> colors =
+    static std::regex int_regex{ R"([-+]?([0-9]*[0-9]+))" };
+    static std::regex flt_regex{ R"([-+]?([0-9]*.[0-9]+|[0-9]+))" };
+    static std::regex func_regex{ R"(\S*\([\s\S]*\))" };
+
+    static std::map<std::string_view, int> style_enums =
+    {
+        // stroke style
+        { "none", xui::drawcmd::stroke::NONE },
+        { "solid", xui::drawcmd::stroke::SOLID },
+        { "dashed", xui::drawcmd::stroke::DASHED },
+        { "dotted", xui::drawcmd::stroke::DOTTED },
+        { "dashdot", xui::drawcmd::stroke::DASH_DOT },
+        { "dashdotdot", xui::drawcmd::stroke::DASH_DOT_DOT },
+
+        // alignment
+        { "left"	, xui::alignment_flag::LEFT },
+        { "right"	, xui::alignment_flag::RIGHT },
+        { "top"		, xui::alignment_flag::TOP },
+        { "bottom"	, xui::alignment_flag::BOTTOM },
+        { "center"	, xui::alignment_flag::CENTER },
+        { "vcenter"	, xui::alignment_flag::VCENTER },
+        { "hcenter"	, xui::alignment_flag::HCENTER },
+        { "left top"	, xui::alignment_flag::LEFT | xui::alignment_flag::TOP },
+        { "top left"	, xui::alignment_flag::LEFT | xui::alignment_flag::TOP },
+        { "left bottom"	, xui::alignment_flag::LEFT | xui::alignment_flag::BOTTOM },
+        { "bottom left"	, xui::alignment_flag::LEFT | xui::alignment_flag::BOTTOM },
+        { "right top"	, xui::alignment_flag::RIGHT | xui::alignment_flag::TOP },
+        { "top right"	, xui::alignment_flag::RIGHT | xui::alignment_flag::TOP },
+        { "right bottom", xui::alignment_flag::RIGHT | xui::alignment_flag::BOTTOM },
+        { "bottom right", xui::alignment_flag::RIGHT | xui::alignment_flag::BOTTOM },
+        { "left vcenter", xui::alignment_flag::LEFT | xui::alignment_flag::VCENTER },
+        { "vcenter left", xui::alignment_flag::LEFT | xui::alignment_flag::VCENTER },
+        { "right vcenter", xui::alignment_flag::LEFT | xui::alignment_flag::VCENTER },
+        { "vcenter right", xui::alignment_flag::LEFT | xui::alignment_flag::VCENTER },
+        { "top hcenter", xui::alignment_flag::TOP | xui::alignment_flag::HCENTER },
+        { "hcenter top", xui::alignment_flag::TOP | xui::alignment_flag::HCENTER },
+        { "bottom hcenter", xui::alignment_flag::BOTTOM | xui::alignment_flag::HCENTER },
+        { "hcenter bottom", xui::alignment_flag::BOTTOM | xui::alignment_flag::HCENTER },
+        { "vcenter hcenter"	, xui::alignment_flag::CENTER },
+        { "hcenter vcenter"	, xui::alignment_flag::CENTER },
+
+        // direction
+        { "left right", xui::direction::LEFT_RIGHT },
+        { "right left", xui::direction::RIGHT_LEFT },
+        { "top bottom", xui::direction::TOP_BOTTOM },
+        { "bottom top", xui::direction::BOTTOM_TOP },
+    };
+    static std::map<std::string_view, std::uint32_t> style_colors =
     {
         {"transparent", 0x00000000 },
         { "maroon", 0x800000FF },
@@ -167,46 +213,12 @@ namespace
         { "ghostwhite", 0xF8F8FFFF },
         { "white", 0xFFFFFFFF }
     };
-    static std::map<std::string_view, int> styles =
+    static std::map<std::string_view, std::function<xui::style::variant( std::string_view )>> style_functions =
     {
-        { "none", xui::drawcmd::stroke::NONE },
-        { "solid", xui::drawcmd::stroke::SOLID },
-        { "dashed", xui::drawcmd::stroke::DASHED },
-        { "dotted", xui::drawcmd::stroke::DOTTED },
-        { "dashdot", xui::drawcmd::stroke::DASH_DOT },
-        { "dashdotdot", xui::drawcmd::stroke::DASH_DOT_DOT },
-    };
-    static std::map<std::string_view, int> aligns =
-    {
-        { "left"	, xui::alignment_flag::LEFT },
-        { "right"	, xui::alignment_flag::RIGHT },
-        { "top"		, xui::alignment_flag::TOP },
-        { "bottom"	, xui::alignment_flag::BOTTOM },
-        { "center"	, xui::alignment_flag::CENTER },
-        { "vcenter"	, xui::alignment_flag::VCENTER },
-        { "hcenter"	, xui::alignment_flag::HCENTER },
-
-        { "left top"	, xui::alignment_flag::LEFT | xui::alignment_flag::TOP },
-        { "top left"	, xui::alignment_flag::LEFT | xui::alignment_flag::TOP },
-        { "left bottom"	, xui::alignment_flag::LEFT | xui::alignment_flag::BOTTOM },
-        { "bottom left"	, xui::alignment_flag::LEFT | xui::alignment_flag::BOTTOM },
-        { "right top"	, xui::alignment_flag::RIGHT | xui::alignment_flag::TOP },
-        { "top right"	, xui::alignment_flag::RIGHT | xui::alignment_flag::TOP },
-        { "right bottom", xui::alignment_flag::RIGHT | xui::alignment_flag::BOTTOM },
-        { "bottom right", xui::alignment_flag::RIGHT | xui::alignment_flag::BOTTOM },
-
-        { "left vcenter", xui::alignment_flag::LEFT | xui::alignment_flag::VCENTER },
-        { "vcenter left", xui::alignment_flag::LEFT | xui::alignment_flag::VCENTER },
-        { "right vcenter", xui::alignment_flag::LEFT | xui::alignment_flag::VCENTER },
-        { "vcenter right", xui::alignment_flag::LEFT | xui::alignment_flag::VCENTER },
-
-        { "top hcenter", xui::alignment_flag::TOP | xui::alignment_flag::HCENTER },
-        { "hcenter top", xui::alignment_flag::TOP | xui::alignment_flag::HCENTER },
-        { "bottom hcenter", xui::alignment_flag::BOTTOM | xui::alignment_flag::HCENTER },
-        { "hcenter bottom", xui::alignment_flag::BOTTOM | xui::alignment_flag::HCENTER },
-
-        { "vcenter hcenter"	, xui::alignment_flag::CENTER },
-        { "hcenter vcenter"	, xui::alignment_flag::CENTER },
+        {"url", xui::style::parse_url },
+        {"rgb", xui::style::parse_rgb },
+        {"rgba", xui::style::parse_rgba },
+        {"vec4", xui::style::parse_vec4 },
     };
 
     class xui_category : public std::error_category
@@ -336,103 +348,34 @@ void xui::style::load( std::string_view str )
 
                     select.attrs.insert( { name, col } );
                 }
-                else if ( val.find( "url(" ) == 0 )
+                else if ( std::regex_match( val, int_regex ) )
                 {
-                    auto it = val.begin();
-                    auto beg = adv<'('>( it, val.end() ) + 1;
-                    auto end = adv<')'>( beg, val.end() );
-
-                    select.attrs.insert( { name, url( beg, end ) } );
+                    select.attrs.insert( { name, std::stoi( val ) } );
                 }
-                else if ( val.find( "rgb(" ) == 0 )
-                {
-                    xui::color col;
-
-                    auto it = val.begin();
-
-                    auto beg = adv<'('>( it, val.end() ) + 1;
-
-                    auto r_beg = beg;
-                    auto r_end = adv<','>( beg, val.end() );
-                    col.r = std::stoi( std::string( r_beg, r_end ) );
-
-                    auto g_beg = r_end + 1; beg = g_beg;
-                    auto g_end = adv<','>( beg, val.end() );
-                    col.g = std::stoi( std::string( g_beg, g_end ) );
-
-                    auto b_beg = g_end + 1; beg = b_beg;
-                    auto b_end = adv<')'>( beg, val.end() );
-                    col.b = std::stoi( std::string( b_beg, b_end ) );
-
-                    select.attrs.insert( { name, col } );
-                }
-                else if ( val.find( "rgba(" ) == 0 )
-                {
-                    xui::color col;
-
-                    auto it = val.begin();
-
-                    auto beg = adv<'('>( it, val.end() ) + 1;
-
-                    auto r_beg = beg;
-                    auto r_end = adv<','>( beg, val.end() );
-                    col.r = std::stoi( std::string( r_beg, r_end ) );
-
-                    auto g_beg = r_end + 1; beg = g_beg;
-                    auto g_end = adv<','>( beg, val.end() );
-                    col.g = std::stoi( std::string( g_beg, g_end ) );
-
-                    auto b_beg = g_end + 1; beg = b_beg;
-                    auto b_end = adv<','>( beg, val.end() );
-                    col.b = std::stoi( std::string( b_beg, b_end ) );
-
-                    auto a_beg = b_end + 1; beg = a_beg;
-                    auto a_end = adv<')'>( beg, val.end() );
-                    col.a = std::stoi( std::string( a_beg, a_end ) );
-
-                    select.attrs.insert( { name, col } );
-                }
-                else if ( val.find( "vec4(" ) == 0 )
-                {
-                    xui::vec4 vec;
-
-                    auto it = val.begin();
-
-                    auto beg = adv<'('>( it, val.end() ) + 1;
-
-                    auto r_beg = beg;
-                    auto r_end = adv<','>( beg, val.end() );
-                    vec.x = std::stoi( std::string( r_beg, r_end ) );
-
-                    auto g_beg = r_end + 1; beg = g_beg;
-                    auto g_end = adv<','>( beg, val.end() );
-                    vec.y = std::stoi( std::string( g_beg, g_end ) );
-
-                    auto b_beg = g_end + 1; beg = b_beg;
-                    auto b_end = adv<','>( beg, val.end() );
-                    vec.z = std::stoi( std::string( b_beg, b_end ) );
-
-                    auto a_beg = b_end + 1; beg = a_beg;
-                    auto a_end = adv<')'>( beg, val.end() );
-                    vec.w = std::stoi( std::string( a_beg, a_end ) );
-
-                    select.attrs.insert( { name, vec } );
-                }
-                else if ( colors.find( val ) != colors.end() )
-                {
-                    select.attrs.insert( { name, xui::color( colors[val] ) } );
-                }
-                else if ( styles.find( val ) != styles.end() )
-                {
-                    select.attrs.insert( { name, styles[val] } );
-                }
-                else if ( aligns.find( val ) != aligns.end() )
-                {
-                    select.attrs.insert( { name, aligns[val] } );
-                }
-                else if ( std::regex_match( val, float_regex ) )
+                else if ( std::regex_match( val, flt_regex ) )
                 {
                     select.attrs.insert( { name, std::stof( val ) } );
+                }
+                else if ( std::regex_match( val, func_regex ) )
+                {
+                    auto it = style_functions.find( { val.begin(), val.begin() + val.find( '(' ) } );
+                    if ( it != style_functions.end() )
+                    {
+                        auto beg = val.begin();
+                        select.attrs.insert( { name, it->second( { adv<'('>( beg, val.end() ) + 1, val.end() } ) } );
+                    }
+                    else
+                    {
+                        select.attrs.insert( { name, val } );
+                    }
+                }
+                else if ( style_enums.find( val ) != style_enums.end() )
+                {
+                    select.attrs.insert( { name, style_enums[val] } );
+                }
+                else if ( style_colors.find( val ) != style_colors.end() )
+                {
+                    select.attrs.insert( { name, xui::color( style_colors[val] ) } );
                 }
                 else
                 {
@@ -560,6 +503,79 @@ xui::style::variant xui::style::find( std::string_view name ) const
     return {};
 }
 
+xui::style::url xui::style::parse_url( std::string_view val )
+{
+    return url( val );
+}
+
+xui::vec4 xui::style::parse_vec4( std::string_view val )
+{
+    xui::vec4 result;
+
+    auto beg = val.begin();
+    auto r_beg = beg;
+    auto r_end = adv<','>( beg, val.end() );
+    result.x = std::stoi( std::string( r_beg, r_end ) );
+
+    auto g_beg = r_end + 1; beg = g_beg;
+    auto g_end = adv<','>( beg, val.end() );
+    result.y = std::stoi( std::string( g_beg, g_end ) );
+
+    auto b_beg = g_end + 1; beg = b_beg;
+    auto b_end = adv<','>( beg, val.end() );
+    result.z = std::stoi( std::string( b_beg, b_end ) );
+
+    auto a_beg = b_end + 1; beg = a_beg;
+    auto a_end = val.end();
+    result.w = std::stoi( std::string( a_beg, a_end ) );
+
+    return result;
+}
+
+xui::color xui::style::parse_rgb( std::string_view val )
+{
+    xui::color result;
+
+    auto beg = val.begin();
+    auto r_beg = beg;
+    auto r_end = adv<','>( beg, val.end() );
+    result.r = std::stoi( std::string( r_beg, r_end ) );
+
+    auto g_beg = r_end + 1; beg = g_beg;
+    auto g_end = adv<','>( beg, val.end() );
+    result.g = std::stoi( std::string( g_beg, g_end ) );
+
+    auto b_beg = g_end + 1; beg = b_beg;
+    auto b_end = val.end();
+    result.b = std::stoi( std::string( b_beg, b_end ) );
+
+    return result;
+}
+
+xui::color xui::style::parse_rgba( std::string_view val )
+{
+    xui::color result;
+
+    auto beg = val.begin();
+    auto r_beg = beg;
+    auto r_end = adv<','>( beg, val.end() );
+    result.r = std::stoi( std::string( r_beg, r_end ) );
+
+    auto g_beg = r_end + 1; beg = g_beg;
+    auto g_end = adv<','>( beg, val.end() );
+    result.g = std::stoi( std::string( g_beg, g_end ) );
+
+    auto b_beg = g_end + 1; beg = b_beg;
+    auto b_end = adv<','>( beg, val.end() );
+    result.b = std::stoi( std::string( b_beg, b_end ) );
+
+    auto a_beg = b_end + 1; beg = a_beg;
+    auto a_end = val.end();
+    result.a = std::stoi( std::string( a_beg, a_end ) );
+
+    return result;
+}
+
 struct xui::context::private_p
 {
 public:
@@ -682,6 +698,13 @@ R"(
     image{
     },
     slider{
+        border-color: white;
+        background-color: rgb(94, 92, 91);
+    },
+    slider-cursor{
+        border-color: transparent;
+        background-color: red;
+        direction: left right;
     },
     process{
         border-color: white;
@@ -689,10 +712,12 @@ R"(
     },
     process-text{
         stroke-color: white;
+        text-align: left vcenter;
     },
     process-cursor{
         border-color: transparent;
         background-color: red;
+        direction: bottom top;
     },
     textedit_base{
     },
@@ -1065,14 +1090,18 @@ void xui::context::end_window()
     pop_rect();
 }
 
-void xui::context::image( xui::texture_id id )
+bool xui::context::image( xui::texture_id id )
 {
     draw_type( "image", [&]() { draw_image( id, currrent_rect() ); } );
+
+    return true;
 }
 
-void xui::context::label( std::string_view text )
+bool xui::context::label( std::string_view text )
 {
     draw_type( "label", [&]() { draw_text( text, current_font(), currrent_rect() ); } );
+
+    return true;
 }
 
 bool xui::context::button( std::string_view text )
@@ -1106,7 +1135,7 @@ bool xui::context::button( std::string_view text )
     return ( _p->_impl->get_key( id, xui::event::KEY_MOUSE_LEFT) && rect.contains( _p->_impl->get_cursor_pos( id ) ) );
 }
 
-void xui::context::process( float value, std::string_view text )
+bool xui::context::process( float value, std::string_view text )
 {
     draw_type( "process", [&]()
     {
@@ -1116,7 +1145,25 @@ void xui::context::process( float value, std::string_view text )
 
         draw_element( "cursor", [&]()
         {
-            xui::rect cursor_rect = { background_rect.x, background_rect.y, background_rect.w * value, background_rect.h };
+            xui::rect cursor_rect;
+
+            switch ( current_style( "direction" ).value<xui::direction>( xui::direction::LEFT_RIGHT ) )
+            {
+            case xui::LEFT_RIGHT:
+                cursor_rect = { background_rect.x, background_rect.y, background_rect.w * value, background_rect.h };
+                break;
+            case xui::RIGHT_LEFT:
+                cursor_rect = { background_rect.x + ( background_rect.w - ( background_rect.w * value ) ), background_rect.y, background_rect.w * value, background_rect.h };
+                break;
+            case xui::TOP_BOTTOM:
+                cursor_rect = { background_rect.x, background_rect.y, background_rect.w, background_rect.h * value };
+                break;
+            case xui::BOTTOM_TOP:
+                cursor_rect = { background_rect.x, background_rect.y + ( background_rect.h - ( background_rect.h * value ) ), background_rect.w, background_rect.h * value };
+                break;
+            default:
+                break;
+            }
 
             draw_rect( cursor_rect );
         } );
@@ -1126,13 +1173,73 @@ void xui::context::process( float value, std::string_view text )
             draw_element( "text", [&]() { draw_text( text, current_font(), background_rect ); } );
         }
     } );
+
+    return true;
 }
 
 bool xui::context::textedit( xui::textedit_base * state, std::string_view hint )
 {
+    draw_type( "textedit", [&]()
+    {
+        auto rect = currrent_rect();
 
+        draw_rect( rect );
+
+        if ( state->size() == 0 )
+        {
+            draw_text( hint, current_font(), rect );
+        }
+        else
+        {
+
+        }
+    } );
 
     return false;
+}
+
+bool xui::context::slider_int( int * cur, int size, int min, int max )
+{
+    draw_type( "slider", [&]()
+    {
+        auto background_rect = currrent_rect();
+
+        draw_rect( background_rect );
+
+        draw_element( "cursor", [&]()
+        {
+            xui::rect cursor_rect;
+            int cursor_w = std::max<int>( 10, background_rect.w / ( max - min ) );
+            int cursor_h = background_rect.h;
+
+            for ( int i = 0; i < size; i++ )
+            {
+                switch ( current_style( "direction" ).value<xui::direction>( xui::direction::LEFT_RIGHT ) )
+                {
+                case xui::LEFT_RIGHT:
+                    cursor_rect = {
+                        background_rect.x + ( ( background_rect.w / ( max - min ) ) * cur[0] ) - ( cursor_w / 2 ),
+                        background_rect.y,
+                        std::max( 10.0f, background_rect.w / ( max - min ) ),
+                        background_rect.h
+                    };
+                    break;
+                case xui::RIGHT_LEFT:
+                    break;
+                case xui::TOP_BOTTOM:
+                    break;
+                case xui::BOTTOM_TOP:
+                    break;
+                default:
+                    break;
+                }
+
+                draw_rect( cursor_rect );
+            }
+        } );
+    } );
+
+    return true;
 }
 
 void xui::context::push_type( std::string_view type )

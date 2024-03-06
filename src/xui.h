@@ -272,8 +272,8 @@ namespace xui
 				}
 				else if constexpr ( std::is_same_v<T, float> )
 				{
-					if ( index() == 3 )
-						return (T)std::get<float>( *this );
+					if ( index() == 1 )
+						return (T)std::get<int>( *this );
 
 					return std::get<T>( *this );
 				}
@@ -305,8 +305,14 @@ namespace xui
 		void load( std::string_view str );
 		variant find( std::string_view name ) const;
 
+	public:
+		static url parse_url( std::string_view val );
+		static xui::vec4 parse_vec4( std::string_view val );
+		static xui::color parse_rgb( std::string_view val );
+		static xui::color parse_rgba( std::string_view val );
+
 	private:
-		template<typename It> void skip( It & it, const It & end ) const
+		template<typename It> static void skip( It & it, const It & end )
 		{
 			if ( it != end )
 			{
@@ -314,7 +320,7 @@ namespace xui
 					++it;
 			}
 		}
-		template<char c, typename It> It adv( It & it, const It & end ) const
+		template<char c, typename It> static It adv( It & it, const It & end )
 		{
 			if ( it != end )
 			{
@@ -329,7 +335,7 @@ namespace xui
 
 			return it;
 		}
-		template<char c, typename It> bool check( It & it, const It & end ) const
+		template<char c, typename It> static bool check( It & it, const It & end )
 		{
 			if ( it != end )
 			{
@@ -540,14 +546,14 @@ namespace xui
 		void end_window();
 
 	public:
-		void image( xui::texture_id id );
-		void label( std::string_view text );
+		bool image( xui::texture_id id );
+		bool label( std::string_view text );
 		bool button( std::string_view text );
-		void process(float value, std::string_view text = "" );
+		bool process( float value, std::string_view text = "" );
 		bool textedit( xui::textedit_base * state, std::string_view hint = "" );
 
 	public:
-		bool slider_int();
+		bool slider_int(int * cur, int size, int min, int max );
 		bool slider_float();
 		bool slider_angle();
 
@@ -684,25 +690,21 @@ namespace xui
 		friend class context;
 
 	public:
-		virtual bool input( int pos, xui::event event, std::string_view unicode, bool cap, bool alt, bool ctrl, bool shift ) = 0;
+		using char_type = int;
+
+	public:
+		virtual bool input( int pos, xui::event event, char_type unicode ) = 0;
 		virtual void duplicate( int beg, int end ) = 0;
-		virtual void paste( int pos ) = 0;
+		virtual void paste( int pos, std::string_view data ) = 0;
 		virtual void remove( int beg, int end ) = 0;
 
 	public:
-		virtual int row_count() const = 0;
-		virtual int row_index( int pos ) const = 0;
-		virtual int row_beg_pos( int row ) const = 0;
-		virtual int row_end_pos( int row ) const = 0;
-		virtual std::string_view row_data( int row ) const = 0;
-
-	public:
-		virtual int string_count() const = 0;
-		virtual std::string_view string_data( int beg, int end ) const = 0;
+		virtual int size() const = 0;
+		virtual char_type at( int idx ) const = 0;
+		virtual std::string_view data( int beg, int end ) const = 0;
 
 	private:
 		int _pos = 0;
-		int _row_beg = 0, _row_end = 0;
 		int _select_beg = 0, _select_end = 0;
 	};
 
@@ -724,10 +726,22 @@ namespace xui
 	public:
 		textedit_state( std::string_view text = "", textedit_state::flag flags = TEXTEDIT_NONE, std::pmr::memory_resource * resource = std::pmr::get_default_resource() );
 
+	public:
+		bool input( int pos, xui::event event, char_type unicode ) override;
+		void duplicate( int beg, int end ) override;
+		void paste( int pos, std::string_view data ) override;
+		void remove( int beg, int end ) override;
+
+	public:
+		int size() const override;
+		char_type at( int idx ) const override;
+		std::string_view data( int beg, int end ) const override;
+
 	private:
 		flag _flags;
 		std::string _buffer;
 		std::string _duplicate;
+		std::pmr::memory_resource * _resource = nullptr;
 	};
 
 	namespace system_resource
