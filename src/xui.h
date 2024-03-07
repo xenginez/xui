@@ -11,16 +11,20 @@
 
 namespace xui
 {
+	class url;
 	class size;
 	class rect;
 	class vec4;
-	class point;
+	class vec2;
 	class color;
 	class style;
 	class drawcmd;
 	class context;
 	class implement;
 	class textedit_base;
+	template<typename ... Ts>
+	struct overload : Ts ... { using Ts::operator() ...; };
+	template<class... Ts> overload( Ts... ) -> overload<Ts...>;
 
 	enum err
 	{
@@ -188,6 +192,12 @@ namespace xui
 	using error_callback_type = std::function<void( const context *, std::error_code )>;
 	using item_data_callback_type = std::function<std::string_view( const context *, int row, int col )>;
 
+	class url : public std::string
+	{
+	public:
+		std::string::basic_string;
+	};
+
 	class size
 	{
 	public:
@@ -200,20 +210,20 @@ namespace xui
 		float x = 0, y = 0, w = 0, h = 0;
 
 	public:
-		bool contains( const xui::point & p ) const;
+		bool contains( const xui::vec2 & p ) const;
 		xui::rect margins_added( float left, float right, float top, float bottom ) const;
+	};
+
+	class vec2
+	{
+	public:
+		float x = 0, y = 0;
 	};
 
 	class vec4
 	{
 	public:
 		float x = 0, y = 0, z = 0, w = 0;
-	};
-
-	class point
-	{
-	public:
-		float x = 0, y = 0;
 	};
 
 	class color
@@ -243,44 +253,69 @@ namespace xui
 	class style
 	{
 	public:
-		struct url : public std::string
+		struct variant : public std::variant<std::monostate, int, float, uint32_t, std::string, xui::color, xui::vec2, xui::vec4, xui::url>
 		{
 		public:
-			std::string::basic_string;
-		};
-		struct variant : public std::variant<std::monostate, int, float, std::string, xui::color, xui::vec4, url>
-		{
+			using std::variant<std::monostate, int, float, uint32_t, std::string, xui::color, xui::vec2, xui::vec4, xui::url>::variant;
+
 		public:
-			using std::variant<std::monostate, int, float, std::string, xui::color, xui::vec4, url>::variant;
+			static constexpr const std::size_t nil_idx = 0;
+			static constexpr const std::size_t int_idx = 1;
+			static constexpr const std::size_t float_idx = 2;
+			static constexpr const std::size_t flag_idx = 3;
+			static constexpr const std::size_t string_idx = 4;
+			static constexpr const std::size_t color_idx = 5;
+			static constexpr const std::size_t vec2_idx = 6;
+			static constexpr const std::size_t vec4_idx = 7;
+			static constexpr const std::size_t url_idx = 8;
 
 		public:
 			template<typename T> T value( const T & def = {} ) const
 			{
-				if ( index() == 0 )
+				if ( index() == nil_idx )
 					return def;
 
 				if constexpr ( std::is_enum_v<T> )
 				{
-					return (T)std::get<int>( *this );
+					return (T)std::get<uint32_t>( *this );
 				}
 				else if constexpr ( std::is_same_v<T, int> )
 				{
-					if ( index() == 2 )
+					if ( index() == float_idx )
 						return (T)std::get<float>( *this );
 
 					return std::get<T>( *this );
 				}
 				else if constexpr ( std::is_same_v<T, float> )
 				{
-					if ( index() == 1 )
+					if ( index() == int_idx )
 						return (T)std::get<int>( *this );
+
+					return std::get<T>( *this );
+				}
+				else if constexpr ( std::is_same_v<T, xui::size> )
+				{
+					if ( index() == vec2_idx )
+					{
+						auto v2 = std::get<xui::vec2>( *this );
+						return xui::size( v2.x, v2.y );
+					}
 
 					return std::get<T>( *this );
 				}
 				else if constexpr ( std::is_same_v<T, std::string> )
 				{
-					if ( index() == 6 )
-						return std::get<url>( *this );
+					if ( index() == url_idx )
+						return std::get<xui::url>( *this );
+
+					return std::get<T>( *this );
+				}
+				else if constexpr ( std::is_same_v<T, std::string_view> )
+				{
+					if ( index() == string_idx )
+						return std::get<std::string>( *this );
+					if ( index() == url_idx )
+						return std::get<xui::url>( *this );
 
 					return std::get<T>( *this );
 				}
@@ -304,12 +339,42 @@ namespace xui
 	public:
 		void load( std::string_view str );
 		variant find( std::string_view name ) const;
+		template<typename T, typename Container> void get_values( Container & _c ) const
+		{
+			for ( const auto & it : _selectors )
+			{
+				for ( const auto & addr : it.second.attrs )
+				{
+					std::visit( overload(
+					[&]( const T & val )
+					{
+						_c.push_back( val );
+					},
+					[]( const auto & )
+					{}
+					), addr.second );
+				}
+			}
+		}
 
 	public:
-		static url parse_url( std::string_view val );
+		static int parse_int( std::string_view val );
+		static float parse_flt( std::string_view val );
+		static xui::url parse_url( std::string_view val );
+		static xui::vec2 parse_vec2( std::string_view val );
 		static xui::vec4 parse_vec4( std::string_view val );
 		static xui::color parse_rgb( std::string_view val );
 		static xui::color parse_rgba( std::string_view val );
+
+	public:
+		static bool register_flag( std::string_view name, std::uint32_t flags );
+		static bool register_color( std::string_view name, const xui::color & color );
+		static bool register_function( std::string_view name, const std::function<xui::style::variant( std::string_view )> & func );
+
+	private:
+		static std::map<std::string_view, std::uint32_t> & flags();
+		static std::map<std::string_view, std::uint32_t> & colors();
+		static std::map<std::string_view, std::function<xui::style::variant( std::string_view )>> & functions();
 
 	private:
 		template<typename It> static void skip( It & it, const It & end )
@@ -322,6 +387,8 @@ namespace xui
 		}
 		template<char c, typename It> static It adv( It & it, const It & end )
 		{
+			skip( it, end );
+
 			if ( it != end )
 			{
 				while ( it != end && *it != c ) ++it;
@@ -373,7 +440,7 @@ namespace xui
 				DASH_DOT_DOT,		// _ . . _ . . _
 			};
 
-			int style = 1;
+			uint32_t style = 1;
 			float width = 1;
 			xui::color color;
 			xui::vec4 radius;
@@ -394,7 +461,7 @@ namespace xui
 		};
 		struct line_element
 		{
-			xui::point p1, p2;
+			xui::vec2 p1, p2;
 			xui::drawcmd::stroke stroke;
 		};
 		struct rect_element
@@ -405,37 +472,37 @@ namespace xui
 		};
 		struct path_element
 		{
-			inline path_element & moveto( const xui::point & p )
+			inline path_element & moveto( const xui::vec2 & p )
 			{
 				data.append( std::format( "M{} {} ", p.x, p.y ) );
 				return *this;
 			}
-			inline path_element & lineto( const xui::point & p )
+			inline path_element & lineto( const xui::vec2 & p )
 			{
 				data.append( std::format( "L{} {} ", p.x, p.y ) );
 				return *this;
 			}
-			inline path_element & curveto( const xui::point & c1, const xui::point & c2, const xui::point & e )
+			inline path_element & curveto( const xui::vec2 & c1, const xui::vec2 & c2, const xui::vec2 & e )
 			{
 				data.append( std::format( "C{} {} {} {} ", c1.x, c1.y, c2.x, c2.y, e.x, e.y ) );
 				return *this;
 			}
-			inline path_element & smooth_curveto( const xui::point & c, const xui::point & e )
+			inline path_element & smooth_curveto( const xui::vec2 & c, const xui::vec2 & e )
 			{
 				data.append( std::format( "S{} {} {} {} ", c.x, c.y, e.x, e.y ) );
 				return *this;
 			}
-			inline path_element & quadratic_bezier_curve( const xui::point & c, const xui::point & e )
+			inline path_element & quadratic_bezier_curve( const xui::vec2 & c, const xui::vec2 & e )
 			{
 				data.append( std::format( "Q{} {} {} {} ", c.x, c.y, e.x, e.y ) );
 				return *this;
 			}
-			inline path_element & smooth_quadratic_bezier_curveto( const xui::point & e )
+			inline path_element & smooth_quadratic_bezier_curveto( const xui::vec2 & e )
 			{
 				data.append( std::format( "T{} {} ", e.x, e.y ) );
 				return *this;
 			}
-			inline path_element & elliptical_arc( float x_raduis, float y_raduis, float x_angle, bool arc_len, bool arc_dir, const xui::point & e )
+			inline path_element & elliptical_arc( float x_raduis, float y_raduis, float x_angle, bool arc_len, bool arc_dir, const xui::vec2 & e )
 			{
 				data.append( std::format( "A{} {} {} {} {} {} {} ", x_raduis, y_raduis, x_angle, arc_len ? 1 : 0, arc_dir ? 1 : 0, e.x, e.y ) );
 				return *this;
@@ -458,14 +525,14 @@ namespace xui
 		struct circle_element
 		{
 			float radius = 1;
-			xui::point center;
+			xui::vec2 center;
 			xui::drawcmd::stroke border;
 			xui::drawcmd::filled filled;
 		};
 		struct ellipse_element
 		{
-			xui::point center;
-			xui::point radius;
+			xui::vec2 center;
+			xui::vec2 radius;
 			xui::drawcmd::stroke border;
 			xui::drawcmd::filled filled;
 		};
@@ -473,7 +540,7 @@ namespace xui
 		{
 			xui::drawcmd::stroke border;
 			xui::drawcmd::filled filled;
-			std::pmr::vector<xui::point> points;
+			std::pmr::vector<xui::vec2> points;
 		};
 
 	public:
@@ -554,7 +621,7 @@ namespace xui
 
 	public:
 		bool slider_int(int * cur, int size, int min, int max );
-		bool slider_float();
+		bool slider_float( float * cur, int size, float min, float max );
 		bool slider_angle();
 
 	public:
@@ -633,13 +700,13 @@ namespace xui
 
 	protected:
 		xui::drawcmd::text_element & draw_text( std::string_view text, xui::font_id id, const xui::rect & rect );
-		xui::drawcmd::line_element & draw_line( const xui::point & p1, const xui::point & p2 );
+		xui::drawcmd::line_element & draw_line( const xui::vec2 & p1, const xui::vec2 & p2 );
 		xui::drawcmd::rect_element & draw_rect( const xui::rect & rect );
 		xui::drawcmd::path_element & draw_path( std::string_view data = "" );
 		xui::drawcmd::image_element & draw_image( xui::texture_id id, const xui::rect & rect );
-		xui::drawcmd::circle_element & draw_circle( const xui::point & center, float radius );
-		xui::drawcmd::ellipse_element & draw_ellipse( const xui::point & center, const xui::point & radius );
-		xui::drawcmd::polygon_element & draw_polygon( std::span<xui::point> points );
+		xui::drawcmd::circle_element & draw_circle( const xui::vec2 & center, float radius );
+		xui::drawcmd::ellipse_element & draw_ellipse( const xui::vec2 & center, const xui::vec2 & radius );
+		xui::drawcmd::polygon_element & draw_polygon( std::span<xui::vec2> points );
 
 	private:
 		private_p * _p;
@@ -682,7 +749,7 @@ namespace xui
 
 	public:
 		virtual int get_key( xui::window_id id, xui::event key ) const = 0;
-		virtual xui::point get_cursor_pos( xui::window_id id ) const = 0;
+		virtual xui::vec2 get_cursor_pos( xui::window_id id ) const = 0;
 	};
 
 	class textedit_base
@@ -754,80 +821,80 @@ namespace xui
 		static constexpr xui::string_id ICON_INFORMATION	= "icon://information";
 	}
 
-	inline xui::point	operator-( const xui::point & lhs )
+	inline xui::vec2	operator-( const xui::vec2 & lhs )
 	{
-		return xui::point( -lhs.x, -lhs.y );
+		return xui::vec2( -lhs.x, -lhs.y );
 	}
-	inline xui::point	operator+( const xui::point & lhs, const float rhs )
+	inline xui::vec2	operator+( const xui::vec2 & lhs, const float rhs )
 	{
-		return xui::point( lhs.x + rhs, lhs.y + rhs );
+		return xui::vec2( lhs.x + rhs, lhs.y + rhs );
 	}
-	inline xui::point	operator-( const xui::point & lhs, const float rhs )
+	inline xui::vec2	operator-( const xui::vec2 & lhs, const float rhs )
 	{
-		return xui::point( lhs.x - rhs, lhs.y - rhs );
+		return xui::vec2( lhs.x - rhs, lhs.y - rhs );
 	}
-	inline xui::point	operator*( const xui::point & lhs, const float rhs )
+	inline xui::vec2	operator*( const xui::vec2 & lhs, const float rhs )
 	{
-		return xui::point( lhs.x * rhs, lhs.y * rhs );
+		return xui::vec2( lhs.x * rhs, lhs.y * rhs );
 	}
-	inline xui::point	operator/( const xui::point & lhs, const float rhs )
+	inline xui::vec2	operator/( const xui::vec2 & lhs, const float rhs )
 	{
-		return xui::point( lhs.x / rhs, lhs.y / rhs );
+		return xui::vec2( lhs.x / rhs, lhs.y / rhs );
 	}
-	inline xui::point	operator+( const xui::point & lhs, const xui::point & rhs )
+	inline xui::vec2	operator+( const xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
-		return xui::point( lhs.x + rhs.x, lhs.y + rhs.y );
+		return xui::vec2( lhs.x + rhs.x, lhs.y + rhs.y );
 	}
-	inline xui::point	operator-( const xui::point & lhs, const xui::point & rhs )
+	inline xui::vec2	operator-( const xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
-		return xui::point( lhs.x - rhs.x, lhs.y - rhs.y );
+		return xui::vec2( lhs.x - rhs.x, lhs.y - rhs.y );
 	}
-	inline xui::point	operator*( const xui::point & lhs, const xui::point & rhs )
+	inline xui::vec2	operator*( const xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
-		return xui::point( lhs.x * rhs.x, lhs.y * rhs.y );
+		return xui::vec2( lhs.x * rhs.x, lhs.y * rhs.y );
 	}
-	inline xui::point	operator/( const xui::point & lhs, const xui::point & rhs )
+	inline xui::vec2	operator/( const xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
-		return xui::point( lhs.x / rhs.x, lhs.y / rhs.y );
+		return xui::vec2( lhs.x / rhs.x, lhs.y / rhs.y );
 	}
-	inline xui::point & operator+=( xui::point & lhs, const float rhs )
+	inline xui::vec2 & operator+=( xui::vec2 & lhs, const float rhs )
 	{
 		lhs.x += rhs; lhs.y += rhs; return lhs;
 	}
-	inline xui::point & operator-=( xui::point & lhs, const float rhs )
+	inline xui::vec2 & operator-=( xui::vec2 & lhs, const float rhs )
 	{
 		lhs.x -= rhs; lhs.y -= rhs; return lhs;
 	}
-	inline xui::point &	operator*=( xui::point & lhs, const float rhs )
+	inline xui::vec2 &	operator*=( xui::vec2 & lhs, const float rhs )
 	{
 		lhs.x *= rhs; lhs.y *= rhs; return lhs;
 	}
-	inline xui::point &	operator/=( xui::point & lhs, const float rhs )
+	inline xui::vec2 &	operator/=( xui::vec2 & lhs, const float rhs )
 	{
 		lhs.x /= rhs; lhs.y /= rhs; return lhs;
 	}
-	inline xui::point &	operator+=( xui::point & lhs, const xui::point & rhs )
+	inline xui::vec2 &	operator+=( xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		lhs.x += rhs.x; lhs.y += rhs.y; return lhs;
 	}
-	inline xui::point &	operator-=( xui::point & lhs, const xui::point & rhs )
+	inline xui::vec2 &	operator-=( xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		lhs.x -= rhs.x; lhs.y -= rhs.y; return lhs;
 	}
-	inline xui::point &	operator*=( xui::point & lhs, const xui::point & rhs )
+	inline xui::vec2 &	operator*=( xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		lhs.x *= rhs.x; lhs.y *= rhs.y; return lhs;
 	}
-	inline xui::point &	operator/=( xui::point & lhs, const xui::point & rhs )
+	inline xui::vec2 &	operator/=( xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		lhs.x /= rhs.x; lhs.y /= rhs.y; return lhs;
 	}
 
-	inline bool			operator==( const xui::point & lhs, const xui::point & rhs )
+	inline bool			operator==( const xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		return lhs.x == rhs.x && lhs.y == rhs.y;
 	}
-	inline bool			operator!=( const xui::point & lhs, const xui::point & rhs )
+	inline bool			operator!=( const xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		return lhs.x != rhs.x || lhs.y != rhs.y;
 	}

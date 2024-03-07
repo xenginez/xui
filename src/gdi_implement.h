@@ -42,7 +42,7 @@ public:
 public:
 	void set_event( xui::window_id id, xui::event key, int val );
 	int get_key( xui::window_id id, xui::event key ) const override;
-	xui::point get_cursor_pos( xui::window_id id ) const override;
+	xui::vec2 get_cursor_pos( xui::window_id id ) const override;
 
 private:
 	void present();

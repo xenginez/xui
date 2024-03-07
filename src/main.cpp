@@ -5,8 +5,11 @@ int main()
 {
 	xui::context ctx;
 	gdi_implement imp;
-	xui::style darkstyle;
-	darkstyle.load( xui::context::dark_style() );
+	xui::style style;
+	style.load( xui::context::dark_style() );
+
+	std::vector<xui::url> urls;
+	style.get_values<xui::url>( urls );
 
 	imp.init();
 	ctx.init( &imp );
@@ -16,7 +19,7 @@ int main()
 	auto window = imp.create_window( "XUI", icon, { 500, 540, 600, 600 } );
 
 	ctx.push_font( font );
-	ctx.push_style( &darkstyle );
+	ctx.push_style( &style );
 
 	imp.update( [&]()
 	{

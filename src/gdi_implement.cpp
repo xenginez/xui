@@ -35,15 +35,15 @@ namespace
     struct eventmap
     {
     public:
-        xui::point dt() const
+        xui::vec2 dt() const
         {
             return _cursorpos - _cursorold;
         }
-        const xui::point & pos() const
+        const xui::vec2 & pos() const
         {
             return _cursorpos;
         }
-        const xui::point & oldpos() const
+        const xui::vec2 & oldpos() const
         {
             return _cursorold;
         }
@@ -53,12 +53,9 @@ namespace
         }
 
     public:
-        xui::point _cursorpos = {}, _cursorold = {};
+        xui::vec2 _cursorpos = {}, _cursorold = {};
         std::array<int, xui::event::EVENT_MAX_COUNT> _events = { 0 };
     };
-
-    template<typename ... Ts> struct overload : Ts ... { using Ts::operator() ...; };
-    template<class... Ts> overload( Ts... ) -> overload<Ts...>;
 
     std::wstring ansi_wide( std::string_view str )
     {
@@ -673,7 +670,7 @@ int gdi_implement::get_key( xui::window_id id, xui::event key ) const
     return _p->_eventmap[id][key];
 }
 
-xui::point gdi_implement::get_cursor_pos( xui::window_id id ) const
+xui::vec2 gdi_implement::get_cursor_pos( xui::window_id id ) const
 {
     return _p->_eventmap[id].pos();
 }
@@ -715,7 +712,7 @@ void gdi_implement::render( std::span<xui::drawcmd> cmds )
 
         if ( cmd.id < _p->_windows.size() && _p->_windows[cmd.id].hwnd != nullptr )
         {
-            std::visit( overload(
+            std::visit( xui::overload(
             [&]( std::monostate )
             {
 
@@ -799,9 +796,9 @@ void gdi_implement::render( std::span<xui::drawcmd> cmds )
                 Gdiplus::Pen pen( Gdiplus::Color( element.stroke.color.a, element.stroke.color.r, element.stroke.color.g, element.stroke.color.b ), element.stroke.width );
 
                 auto it = element.data.begin();
-                auto ppoint = []( auto & it ) -> xui::point
+                auto ppoint = []( auto & it ) -> xui::vec2
                 {
-                    xui::point p;
+                    xui::vec2 p;
 
                     auto beg = it;
                     while ( std::isdigit( *it ) ) it++;
@@ -818,7 +815,7 @@ void gdi_implement::render( std::span<xui::drawcmd> cmds )
 
                     return p;
                 };
-                xui::point m;
+                xui::vec2 m;
 
                 while ( it != element.data.end() )
                 {
