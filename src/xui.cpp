@@ -56,6 +56,256 @@ bool xui::rect::contains( const xui::vec2 & p ) const
     return ( p.x > x && p.x < ( x + w ) ) && ( p.y > y && p.y < ( y + h ) );
 }
 
+xui::url::url( url && val )
+    : string_type( val )
+{
+    parse();
+}
+
+xui::url::url( const url & val )
+    : string_type( val )
+{
+    parse();
+}
+
+xui::url::url( string_type && val )
+    : string_type( val )
+{
+    parse();
+}
+
+xui::url::url( const string_type & val )
+    : string_type( val )
+{
+    parse();
+}
+
+xui::url::url( string_view_type val )
+    : string_type( val.begin(), val.end() )
+{
+    parse();
+}
+
+xui::url & xui::url::operator=( xui::url && val )
+{
+    string_type::operator=( val );
+
+    parse();
+
+    return *this;
+}
+
+xui::url & xui::url::operator=( const xui::url & val )
+{
+    string_type::operator=( val );
+
+    parse();
+
+    return *this;
+}
+
+xui::url & xui::url::operator=( string_type && val )
+{
+    string_type::operator=( val );
+
+    parse();
+
+    return *this;
+}
+
+xui::url & xui::url::operator=( const string_type & val )
+{
+    string_type::operator=( val );
+
+    parse();
+
+    return *this;
+}
+
+xui::url & xui::url::operator=( string_view_type val )
+{
+    string_type::operator=( { val.begin(), val.end() } );
+
+    parse();
+
+    return *this;
+}
+
+xui::url::string_view_type xui::url::string_view() const
+{
+    return { string_type::begin(), string_type::end() };
+}
+
+xui::url::string_view_type xui::url::scheme() const
+{
+    return _scheme;
+}
+
+xui::url::string_view_type xui::url::username() const
+{
+    return _username;
+}
+
+xui::url::string_view_type xui::url::password() const
+{
+    return _password;
+}
+
+xui::url::string_view_type xui::url::host() const
+{
+    return _host;
+}
+
+xui::url::string_view_type xui::url::port() const
+{
+    return _port;
+}
+
+xui::url::string_view_type xui::url::path() const
+{
+    return _path;
+}
+
+xui::url::string_view_type xui::url::querys() const
+{
+    return _query;
+}
+
+xui::url::string_view_type xui::url::fragment() const
+{
+    return _fragment;
+}
+
+std::size_t xui::url::query_count() const
+{
+    return std::count( _query.begin(), _query.end(), constexpr_flags<char_type>::query_flag );
+}
+
+xui::url::string_view_type xui::url::query_at( std::size_t idx ) const
+{
+    auto beg = _query.begin();
+    auto end = std::find( beg, _query.end(), constexpr_flags<char_type>::query_pair_flag );
+
+    auto count = query_count();
+    for ( std::size_t i = 0; i < idx && i < count; i++ )
+    {
+        beg = end + 1;
+        end = std::find( beg, _query.end(), constexpr_flags<char_type>::query_pair_flag );
+    }
+
+    return { beg, end };
+}
+
+xui::url::const_iterator xui::url::find_it( string_view_type substr, const_iterator offset ) const
+{
+    auto idx = string_type::find( substr, std::distance( string_type::begin(), offset ) );
+    if ( idx == string_type::npos )
+        return string_type::end();
+    return string_type::begin() + idx;
+}
+
+xui::url::const_iterator xui::url::find_it( string_view_type substr, const_iterator beg, const_iterator end ) const
+{
+    string_view_type tmp{ beg, end };
+
+    auto idx = tmp.find( substr );
+    if ( idx == string_type::npos )
+        return end;
+
+    return beg + idx;
+}
+
+void xui::url::parse()
+{
+    // {scheme}://{username}:{password}@{host}:{port}/{path}?{query}#{fragment}
+
+    const_iterator ibeg = string_type::begin();
+    const_iterator iend = string_type::end();
+
+    iend = find_it( constexpr_flags<char_type>::scheme_flag, ibeg );
+    if ( iend != string_type::end() )
+    {
+        _scheme = { ibeg, iend };
+        iend += 3;
+    }
+    else
+    {
+        _scheme = { ibeg, iend };
+        return;
+    }
+
+    ibeg = iend;
+    iend = find_it( constexpr_flags<char_type>::host_flag, ibeg );
+    if ( iend != string_type::end() )
+    {
+        auto im_end = find_it( constexpr_flags<char_type>::username_flag, ibeg, iend );
+        if ( im_end != iend )
+        {
+            auto imm_end = im_end;
+
+            imm_end = find_it( constexpr_flags<char_type>::port_flag, ibeg, im_end );
+            if ( imm_end != im_end )
+            {
+                _username = { ibeg, imm_end };
+                _password = { imm_end + 1, im_end };
+            }
+            else
+            {
+                _username = { ibeg, imm_end };
+            }
+
+            ibeg = im_end + 1;
+        }
+
+        im_end = find_it( constexpr_flags<char_type>::port_flag, ibeg, iend );
+        if ( im_end != iend )
+        {
+            _host = { ibeg, im_end };
+            _port = { im_end + 1, iend };
+        }
+        else
+        {
+            _host = { ibeg, iend };
+        }
+
+        iend += 1;
+    }
+    else
+    {
+        _host = { ibeg, iend };
+        return;
+    }
+
+    ibeg = iend;
+    iend = find_it( constexpr_flags<char_type>::path_flag, ibeg );
+    if ( iend != string_type::end() )
+    {
+        _path = { ibeg, iend };
+        iend += 1;
+    }
+    else
+    {
+        _path = { ibeg, iend };
+        return;
+    }
+
+    ibeg = iend;
+    iend = find_it( constexpr_flags<char_type>::fragment_flag, ibeg );
+    if ( iend != string_type::end() )
+    {
+        _query = { ibeg, iend };
+        iend += 1;
+    }
+    else
+    {
+        _query = { ibeg, iend };
+        return;
+    }
+
+    ibeg = iend;
+    _fragment = { ibeg, string_type::end() };
+}
+
 xui::rect xui::rect::margins_added( float left, float right, float top, float bottom ) const
 {
     return { x - left, y - top, w + left + right, h + top + bottom };

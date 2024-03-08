@@ -195,7 +195,75 @@ namespace xui
 	class url : public std::string
 	{
 	public:
-		std::string::basic_string;
+		using char_type = char;
+		using string_type = std::string;
+		using string_view_type = std::string_view;
+		using iterator = string_type::iterator;
+		using const_iterator = string_type::const_iterator;
+
+	private:
+		template<typename T> struct constexpr_flags;
+		template<> struct constexpr_flags<char>
+		{
+			static constexpr const char * scheme_flag = "://";
+			static constexpr const char * username_flag = "@";
+			static constexpr const char * password_flag = ":";
+			static constexpr const char * host_flag = "/";
+			static constexpr const char * port_flag = ":";
+			static constexpr const char * path_flag = "?";
+			static constexpr const char * fragment_flag = "#";
+			static constexpr const char query_flag = '=';
+			static constexpr const char query_pair_flag = '&';
+		};
+
+	public:
+		url() = default;
+		url( xui::url && val );
+		url( const xui::url & val );
+		url( string_type && val );
+		url( const string_type & val );
+		url( string_view_type val );
+
+	public:
+		url & operator=( xui::url && val );
+		url & operator=( const xui::url & val );
+		url & operator=( string_type && val );
+		url & operator=( const string_type & val );
+		url & operator=( string_view_type val );
+
+	public:
+		string_view_type string_view() const;
+
+	public:
+		string_view_type scheme() const;
+		string_view_type username() const;
+		string_view_type password() const;
+		string_view_type host() const;
+		string_view_type port() const;
+		string_view_type path() const;
+		string_view_type querys() const;
+		string_view_type fragment() const;
+
+	public:
+		std::size_t query_count() const;
+		string_view_type query_at( std::size_t idx ) const;
+
+	private:
+		const_iterator find_it( string_view_type substr, const_iterator offset ) const;
+		const_iterator find_it( string_view_type substr, const_iterator beg, const_iterator end ) const;
+
+	private:
+		void parse();
+
+	private:
+		string_view_type _scheme;
+		string_view_type _username;
+		string_view_type _password;
+		string_view_type _host;
+		string_view_type _port;
+		string_view_type _path;
+		string_view_type _query;
+		string_view_type _fragment;
 	};
 
 	class size
