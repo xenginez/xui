@@ -20,8 +20,8 @@ public:
 	xui::window_id create_window( std::string_view title, xui::texture_id icon, const xui::rect & rect, xui::window_id parent = xui::invalid_id ) override;
 	xui::window_id get_window_parent( xui::window_id id ) const override;
 	void set_window_parent( xui::window_id id, xui::window_id parent ) override;
-	xui::windowstatus get_window_status( xui::window_id id ) const override;
-	void set_window_status( xui::window_id id, xui::windowstatus show ) override;
+	xui::window_status get_window_status( xui::window_id id ) const override;
+	void set_window_status( xui::window_id id, xui::window_status show ) override;
 	xui::rect get_window_rect( xui::window_id id ) const override;
 	void set_window_rect( xui::window_id id, const xui::rect & rect ) override;
 	std::string get_window_title( xui::window_id id ) const override;
@@ -40,11 +40,12 @@ public:
 	void remove_texture( xui::texture_id id ) override;
 
 public:
-	void set_event( xui::window_id id, xui::event key, int val );
-	int get_key( xui::window_id id, xui::event key ) const override;
-	xui::vec2 get_cursor_pos( xui::window_id id ) const override;
+	xui::vec2 get_cursor( xui::window_id id ) const override;
+	int get_event( xui::window_id id, xui::event key ) const override;
+	std::span<xui::vec2> get_touchs( xui::window_id id ) const override;
 
 private:
+	void set_event( xui::window_id id, xui::event key, int val );
 	void present();
 	void render( std::span<xui::drawcmd> cmds );
 

@@ -21,16 +21,15 @@ namespace xui
 	class drawcmd;
 	class context;
 	class implement;
-	class textedit_base;
 	template<typename ... Ts>
 	struct overload : Ts ... { using Ts::operator() ...; };
 	template<class... Ts> overload( Ts... ) -> overload<Ts...>;
 
-	enum err
+	enum class err
 	{
 		ERR_NO = 0,
 	};
-	enum event
+	enum class event
 	{
 		KEY_EVENT_BEG = 0,
 		KEY_TAB = KEY_EVENT_BEG,
@@ -88,30 +87,30 @@ namespace xui
 		KEY_APP_BACK,				// Available on some keyboard/mouses. Often referred as "Browser Back"
 		KEY_APP_FORWARD,
 
-		KEY_GAMEPAD_START,			// Menu (Xbox)      + (Switch)   Start/Options (PS)
-		KEY_GAMEPAD_BACK,			// View (Xbox)      - (Switch)   Share (PS)
-		KEY_GAMEPAD_FACE_LEFT,		// X (Xbox)         Y (Switch)   Square (PS)        // Tap: Toggle Menu. Hold: Windowing mode (Focus/Move/Resize windows)
-		KEY_GAMEPAD_FACE_RIGHT,		// B (Xbox)         A (Switch)   Circle (PS)        // Cancel / Close / Exit
-		KEY_GAMEPAD_FACE_UP,		// Y (Xbox)         X (Switch)   Triangle (PS)      // Text Input / On-screen Keyboard
-		KEY_GAMEPAD_FACE_DOWN,		// A (Xbox)         B (Switch)   Cross (PS)         // Activate / Open / Toggle / Tweak
-		KEY_GAMEPAD_DPAD_LEFT,		// D-pad Left                                       // Move / Tweak / Resize Window (in Windowing mode)
-		KEY_GAMEPAD_DPAD_RIGHT,		// D-pad Right                                      // Move / Tweak / Resize Window (in Windowing mode)
-		KEY_GAMEPAD_DPAD_UP,		// D-pad Up                                         // Move / Tweak / Resize Window (in Windowing mode)
-		KEY_GAMEPAD_DPAD_DOWN,		// D-pad Down                                       // Move / Tweak / Resize Window (in Windowing mode)
-		KEY_GAMEPAD_L1,				// L Bumper (Xbox)  L (Switch)   L1 (PS)            // Tweak Slower / Focus Previous (in Windowing mode)
-		KEY_GAMEPAD_R1,				// R Bumper (Xbox)  R (Switch)   R1 (PS)            // Tweak Faster / Focus Next (in Windowing mode)
-		KEY_GAMEPAD_L2,				// L Trig. (Xbox)   ZL (Switch)  L2 (PS) [Analog]
-		KEY_GAMEPAD_R2,				// R Trig. (Xbox)   ZR (Switch)  R2 (PS) [Analog]
-		KEY_GAMEPAD_L3,				// L Stick (Xbox)   L3 (Switch)  L3 (PS)
-		KEY_GAMEPAD_R3,				// R Stick (Xbox)   R3 (Switch)  R3 (PS)
-		KEY_GAMEPAD_L_STICK_LEFT,	// [Analog]                                         // Move Window (in Windowing mode)
-		KEY_GAMEPAD_L_STICK_RIGHT,	// [Analog]                                         // Move Window (in Windowing mode)
-		KEY_GAMEPAD_L_STICK_UP,		// [Analog]                                         // Move Window (in Windowing mode)
-		KEY_GAMEPAD_L_STICK_DOWN,	// [Analog]                                         // Move Window (in Windowing mode)
-		KEY_GAMEPAD_R_STICK_LEFT,	// [Analog]
-		KEY_GAMEPAD_R_STICK_RIGHT,	// [Analog]
-		KEY_GAMEPAD_R_STICK_UP,		// [Analog]
-		KEY_GAMEPAD_R_STICK_DOWN,	// [Analog]
+		GAMEPAD_START,				// Menu (Xbox)      + (Switch)   Start/Options (PS)
+		GAMEPAD_BACK,				// View (Xbox)      - (Switch)   Share (PS)
+		GAMEPAD_FACE_LEFT,			// X (Xbox)         Y (Switch)   Square (PS)        // Tap: Toggle Menu. Hold: Windowing mode (Focus/Move/Resize windows)
+		GAMEPAD_FACE_RIGHT,			// B (Xbox)         A (Switch)   Circle (PS)        // Cancel / Close / Exit
+		GAMEPAD_FACE_UP,			// Y (Xbox)         X (Switch)   Triangle (PS)      // Text Input / On-screen Keyboard
+		GAMEPAD_FACE_DOWN,			// A (Xbox)         B (Switch)   Cross (PS)         // Activate / Open / Toggle / Tweak
+		GAMEPAD_DPAD_LEFT,			// D-pad Left                                       // Move / Tweak / Resize Window (in Windowing mode)
+		GAMEPAD_DPAD_RIGHT,			// D-pad Right                                      // Move / Tweak / Resize Window (in Windowing mode)
+		GAMEPAD_DPAD_UP,			// D-pad Up                                         // Move / Tweak / Resize Window (in Windowing mode)
+		GAMEPAD_DPAD_DOWN,			// D-pad Down                                       // Move / Tweak / Resize Window (in Windowing mode)
+		GAMEPAD_L1,					// L Bumper (Xbox)  L (Switch)   L1 (PS)            // Tweak Slower / Focus Previous (in Windowing mode)
+		GAMEPAD_R1,					// R Bumper (Xbox)  R (Switch)   R1 (PS)            // Tweak Faster / Focus Next (in Windowing mode)
+		GAMEPAD_L2,					// L Trig. (Xbox)   ZL (Switch)  L2 (PS) [Analog]
+		GAMEPAD_R2,					// R Trig. (Xbox)   ZR (Switch)  R2 (PS) [Analog]
+		GAMEPAD_L3,					// L Stick (Xbox)   L3 (Switch)  L3 (PS)
+		GAMEPAD_R3,					// R Stick (Xbox)   R3 (Switch)  R3 (PS)
+		GAMEPAD_L_STICK_LEFT,		// [Analog]                                         // Move Window (in Windowing mode)
+		GAMEPAD_L_STICK_RIGHT,		// [Analog]                                         // Move Window (in Windowing mode)
+		GAMEPAD_L_STICK_UP,			// [Analog]                                         // Move Window (in Windowing mode)
+		GAMEPAD_L_STICK_DOWN,		// [Analog]                                         // Move Window (in Windowing mode)
+		GAMEPAD_R_STICK_LEFT,		// [Analog]
+		GAMEPAD_R_STICK_RIGHT,		// [Analog]
+		GAMEPAD_R_STICK_UP,			// [Analog]
+		GAMEPAD_R_STICK_DOWN,		// [Analog]
 
 		KEY_MOUSE_LEFT, KEY_MOUSE_RIGHT, KEY_MOUSE_MIDDLE, KEY_MOUSE_X1, KEY_MOUSE_X2,
 		KEY_EVENT_END = KEY_MOUSE_X2,
@@ -120,33 +119,21 @@ namespace xui
 		MOUSE_ENTER, MOUSE_LEAVE, MOUSE_MOVE, MOUSE_WHEEL,
 		MOUSE_EVENT_END = MOUSE_WHEEL,
 
-		WINDOW_EVENT_BEG = MOUSE_EVENT_END,
-		WINDOW_CLOSE,
-		WINDOW_EVENT_END = WINDOW_CLOSE,
-
 		EVENT_MAX_COUNT,
 	};
-	enum direction
+	enum class direction
 	{
 		LEFT_RIGHT,
 		RIGHT_LEFT,
 		TOP_BOTTOM,
 		BOTTOM_TOP,
 	};
-	enum orientation
+	enum class orientation
 	{
 		ORIENT_TOP,
 		ORIENT_LEFT,
 		ORIENT_RIGHT,
 		ORIENT_BOTTOM,
-	};
-	enum windowstatus
-	{
-		SHOW		= 1 << 0,
-		HIDE		= 1 << 1,
-		RESTORE		= 1 << 2,
-		MINIMIZE	= 1 << 3,
-		MAXIMIZE	= 1 << 4,
 	};
 
 	enum font_flag
@@ -172,15 +159,33 @@ namespace xui
 		WINDOW_NO_MINIMIZEBOX				= 1 << 9,
 		WINDOW_NO_MAXIMIZEBOX				= 1 << 10,
 	};
+	enum window_status
+	{
+		WINDOW_SHOW			= 1 << 0,
+		WINDOW_HIDE			= 1 << 1,
+		WINDOW_RESTORE		= 1 << 2,
+		WINDOW_MINIMIZE		= 1 << 3,
+		WINDOW_MAXIMIZE		= 1 << 4,
+	};
+	enum modifier_flag
+	{
+		MOD_NONE		= 0,
+		MOD_SHIFT		= 1 << 0,
+		MOD_CONTROL		= 1 << 1,
+		MOD_ALT			= 1 << 2,
+		MOD_META		= 1 << 3,
+		MOD_KEYPAD		= 1 << 4,
+		MOD_GROUP		= 1 << 5,
+	};
 	enum alignment_flag
 	{
-		LEFT		= 1 << 0,
-		RIGHT		= 1 << 1,
-		TOP			= 1 << 2,
-		BOTTOM		= 1 << 3,
-		VCENTER		= 1 << 4,
-		HCENTER		= 1 << 5,
-		CENTER		= VCENTER | HCENTER,
+		ALIGN_LEFT			= 1 << 0,
+		ALIGN_RIGHT			= 1 << 1,
+		ALIGN_TOP			= 1 << 2,
+		ALIGN_BOTTOM		= 1 << 3,
+		ALIGN_VCENTER		= 1 << 4,
+		ALIGN_HCENTER		= 1 << 5,
+		ALIGN_CENTER		= ALIGN_VCENTER | ALIGN_HCENTER,
 	};
 
 	using font_id = std::size_t;
@@ -266,6 +271,18 @@ namespace xui
 		string_view_type _fragment;
 	};
 
+	class vec2
+	{
+	public:
+		float x = 0, y = 0;
+	};
+
+	class vec4
+	{
+	public:
+		float x = 0, y = 0, z = 0, w = 0;
+	};
+
 	class size
 	{
 	public:
@@ -278,20 +295,9 @@ namespace xui
 		float x = 0, y = 0, w = 0, h = 0;
 
 	public:
+		xui::vec2 center() const;
 		bool contains( const xui::vec2 & p ) const;
 		xui::rect margins_added( float left, float right, float top, float bottom ) const;
-	};
-
-	class vec2
-	{
-	public:
-		float x = 0, y = 0;
-	};
-
-	class vec4
-	{
-	public:
-		float x = 0, y = 0, z = 0, w = 0;
 	};
 
 	class color
@@ -315,6 +321,8 @@ namespace xui
 		color( std::uint8_t r, std::uint8_t g, std::uint8_t b, std::uint8_t a = 255 );
 
 	public:
+		xui::color dark() const;
+		xui::color light() const;
 		xui::color lerp( const xui::color & target, float t ) const;
 	};
 
@@ -426,6 +434,7 @@ namespace xui
 		}
 
 	public:
+		static variant parse( std::string_view val );
 		static int parse_int( std::string_view val );
 		static float parse_flt( std::string_view val );
 		static xui::url parse_url( std::string_view val );
@@ -433,6 +442,8 @@ namespace xui
 		static xui::vec4 parse_vec4( std::string_view val );
 		static xui::color parse_rgb( std::string_view val );
 		static xui::color parse_rgba( std::string_view val );
+		static xui::color parse_dark( std::string_view val );
+		static xui::color parse_light( std::string_view val );
 
 	public:
 		static bool register_flag( std::string_view name, std::uint32_t flags );
@@ -469,6 +480,19 @@ namespace xui
 			}
 
 			return it;
+		}
+		template<char c, typename It> static It adv2( const It & it, const It & end )
+		{
+			It it2 = it;
+
+			skip( it2, end );
+
+			if ( it2 != end )
+			{
+				while ( it2 != end && *it2 != c ) ++it2;
+			}
+
+			return it2;
 		}
 		template<char c, typename It> static bool check( It & it, const It & end )
 		{
@@ -515,6 +539,29 @@ namespace xui
 		};
 		struct filled
 		{
+			enum
+			{
+				NONE,
+				SOLID, // SolidBrush 
+				DENSE1, // HatchBrush
+				DENSE2,
+				DENSE3,
+				DENSE4,
+				DENSE5,
+				DENSE6,
+				DENSE7,
+				HORIZONTAL,
+				VERTICAL,
+				CROSS,
+				FORWARD,
+				BACKWARD,
+				DIAGCROSS,
+				LINEAR_GRADIENT, // LinearGradientBrush 
+				CONICAL_GRADIENT, // GraphicsPath
+				RADIAL_GRADIENT, // GraphicsPath
+				TEXTURE, // TextureBrush
+			};
+
 			xui::color color;
 		};
 
@@ -525,7 +572,7 @@ namespace xui
 			xui::color color;
 			std::string text;
 			xui::font_id font;
-			xui::alignment_flag align = xui::alignment_flag::CENTER;
+			xui::alignment_flag align = xui::alignment_flag::ALIGN_CENTER;
 		};
 		struct line_element
 		{
@@ -647,6 +694,10 @@ namespace xui
 		void push_style( xui::style * style );
 		void pop_style();
 		xui::style::variant current_style( std::string_view attr );
+		template<typename T> T current_style( std::string_view attr, const T & def )
+		{
+			return current_style( attr ).value<T>( def );
+		}
 
 		void push_font( xui::font_id font );
 		void pop_font();
@@ -677,25 +728,18 @@ namespace xui
 		std::span<xui::drawcmd> end();
 
 	public:
-		bool begin_window( std::string_view title, xui::texture_id icon, xui::window_flag flags = xui::window_flag::WINDOW_NONE );
+		bool begin_window( std::string_view title, xui::texture_id icon, int flags = xui::window_flag::WINDOW_NONE );
 		void end_window();
 
 	public:
 		bool image( xui::texture_id id );
 		bool label( std::string_view text );
+		bool radio( bool & checked );
+		bool check( bool & checked );
 		bool button( std::string_view text );
-		bool process( float value, std::string_view text = "" );
-		bool textedit( xui::textedit_base * state, std::string_view hint = "" );
-
-	public:
-		bool slider_int(int * cur, int size, int min, int max );
-		bool slider_float( float * cur, int size, float min, float max );
-		bool slider_angle();
-
-	public:
-		bool radio_button();
-		bool check_button();
-		bool image_button();
+		float slider( float & value, float min, float max );
+		bool process( float value, float min, float max, std::string_view text = "" );
+		float scrollbar( float & value, float step, float min, float max, xui::direction dir = xui::direction::TOP_BOTTOM );
 
 	public:
 		bool begin_menubar();
@@ -740,41 +784,41 @@ namespace xui
 			return end();
 		}
 
-	private:
-		void push_type( std::string_view type );
-		void push_element( std::string_view type );
-		void push_action( std::string_view type );
-		void pop_action();
-		void pop_element();
-		void pop_type();
-		template<typename F> void draw_type( std::string_view type, F && func )
+	protected:
+		void push_style_type( std::string_view type );
+		void pop_style_type();
+		void push_style_element( std::string_view type );
+		void pop_style_element();
+		void push_style_action( std::string_view type );
+		void pop_style_action();
+		template<typename F> void draw_style_type( std::string_view type, F && func )
 		{
-			push_type( type );
+			if ( !type.empty() ) push_style_type( type );
 			func();
-			pop_type();
+			if ( !type.empty() ) pop_style_type();
 		}
-		template<typename F> void draw_element( std::string_view element, F && func )
+		template<typename F> void draw_style_element( std::string_view element, F && func )
 		{
-			push_element( element );
+			if ( !element.empty() ) push_style_element( element );
 			func();
-			pop_element();
+			if ( !element.empty() ) pop_style_element();
 		}
-		template<typename F> void draw_action( std::string_view action, F && func )
+		template<typename F> void draw_style_action( std::string_view action, F && func )
 		{
-			push_action( action );
+			if ( !action.empty() ) push_style_action( action );
 			func();
-			pop_action();
+			if ( !action.empty() ) pop_style_action();
 		}
 
 	protected:
-		xui::drawcmd::text_element & draw_text( std::string_view text, xui::font_id id, const xui::rect & rect );
-		xui::drawcmd::line_element & draw_line( const xui::vec2 & p1, const xui::vec2 & p2 );
-		xui::drawcmd::rect_element & draw_rect( const xui::rect & rect );
-		xui::drawcmd::path_element & draw_path( std::string_view data = "" );
+		xui::drawcmd::text_element & draw_text( std::string_view text, xui::font_id id, const xui::rect & rect, const xui::color & font_color, xui::alignment_flag text_align);
+		xui::drawcmd::line_element & draw_line( const xui::vec2 & p1, const xui::vec2 & p2, uint32_t stroke_style, float stroke_width, const xui::color & stroke_color );
+		xui::drawcmd::rect_element & draw_rect( const xui::rect & rect, uint32_t border_style, float border_width, const xui::color & border_color, const xui::vec4 & border_radius, const xui::color & background_color );
+		xui::drawcmd::path_element & draw_path( uint32_t stroke_style, float stroke_width, const xui::color & stroke_color, const xui::color & background_color );
 		xui::drawcmd::image_element & draw_image( xui::texture_id id, const xui::rect & rect );
-		xui::drawcmd::circle_element & draw_circle( const xui::vec2 & center, float radius );
-		xui::drawcmd::ellipse_element & draw_ellipse( const xui::vec2 & center, const xui::vec2 & radius );
-		xui::drawcmd::polygon_element & draw_polygon( std::span<xui::vec2> points );
+		xui::drawcmd::circle_element & draw_circle( const xui::vec2 & center, float radius, uint32_t border_style, float border_width, const xui::color & border_color, const xui::vec4 & border_radius, const xui::color & background_color );
+		xui::drawcmd::ellipse_element & draw_ellipse( const xui::vec2 & center, const xui::vec2 & radius, uint32_t border_style, float border_width, const xui::color & border_color, const xui::vec4 & border_radius, const xui::color & background_color );
+		xui::drawcmd::polygon_element & draw_polygon( std::span<xui::vec2> points, uint32_t border_style, float border_width, const xui::color & border_color, const xui::vec4 & border_radius, const xui::color & background_color );
 
 	private:
 		private_p * _p;
@@ -796,8 +840,8 @@ namespace xui
 		virtual xui::window_id create_window( std::string_view title, xui::texture_id icon, const xui::rect & rect, xui::window_id parent = xui::invalid_id ) = 0;
 		virtual xui::window_id get_window_parent( xui::window_id id ) const = 0;
 		virtual void set_window_parent( xui::window_id id, xui::window_id parent ) = 0;
-		virtual xui::windowstatus get_window_status( xui::window_id id ) const = 0;
-		virtual void set_window_status( xui::window_id id, xui::windowstatus show ) = 0;
+		virtual xui::window_status get_window_status( xui::window_id id ) const = 0;
+		virtual void set_window_status( xui::window_id id, xui::window_status show ) = 0;
 		virtual xui::rect get_window_rect( xui::window_id id ) const = 0;
 		virtual void set_window_rect( xui::window_id id, const xui::rect & rect ) = 0;
 		virtual std::string get_window_title( xui::window_id id ) const = 0;
@@ -816,67 +860,9 @@ namespace xui
 		virtual void remove_texture( xui::texture_id id ) = 0;
 
 	public:
-		virtual int get_key( xui::window_id id, xui::event key ) const = 0;
-		virtual xui::vec2 get_cursor_pos( xui::window_id id ) const = 0;
-	};
-
-	class textedit_base
-	{
-		friend class context;
-
-	public:
-		using char_type = int;
-
-	public:
-		virtual bool input( int pos, xui::event event, char_type unicode ) = 0;
-		virtual void duplicate( int beg, int end ) = 0;
-		virtual void paste( int pos, std::string_view data ) = 0;
-		virtual void remove( int beg, int end ) = 0;
-
-	public:
-		virtual int size() const = 0;
-		virtual char_type at( int idx ) const = 0;
-		virtual std::string_view data( int beg, int end ) const = 0;
-
-	private:
-		int _pos = 0;
-		int _select_beg = 0, _select_end = 0;
-	};
-
-	class textedit_state : public textedit_base
-	{
-	public:
-		enum flag
-		{
-			TEXTEDIT_NONE				= 0,
-			TEXTEDIT_DEC				= 1 << 0,							// allow 0123456789.+-*/
-			TEXTEDIT_HEX				= 1 << 1,							// allow 0123456789ABCDEFabcdef
-			TEXTEDIT_PASSWORD			= 1 << 2,							// password mode, display all characters as '*'
-			TEXTEDIT_READONLY			= 1 << 3,							// read-only mode
-			TEXTEDIT_NORECALL			= 1 << 4,							// disable undo/redo.
-			TEXTEDIT_MULTILINE			= 1 << 5,							// multi line.
-			TEXTEDIT_WORD_WARP			= ( 1 << 6 ) | TEXTEDIT_MULTILINE,	// auto word warp
-		};
-
-	public:
-		textedit_state( std::string_view text = "", textedit_state::flag flags = TEXTEDIT_NONE, std::pmr::memory_resource * resource = std::pmr::get_default_resource() );
-
-	public:
-		bool input( int pos, xui::event event, char_type unicode ) override;
-		void duplicate( int beg, int end ) override;
-		void paste( int pos, std::string_view data ) override;
-		void remove( int beg, int end ) override;
-
-	public:
-		int size() const override;
-		char_type at( int idx ) const override;
-		std::string_view data( int beg, int end ) const override;
-
-	private:
-		flag _flags;
-		std::string _buffer;
-		std::string _duplicate;
-		std::pmr::memory_resource * _resource = nullptr;
+		virtual xui::vec2 get_cursor( xui::window_id id ) const = 0;
+		virtual int get_event( xui::window_id id, xui::event key ) const = 0;
+		virtual std::span<xui::vec2> get_touchs( xui::window_id id ) const = 0;
 	};
 
 	namespace system_resource

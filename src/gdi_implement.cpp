@@ -53,8 +53,10 @@ namespace
         }
 
     public:
-        xui::vec2 _cursorpos = {}, _cursorold = {};
-        std::array<int, xui::event::EVENT_MAX_COUNT> _events = { 0 };
+        xui::vec2 _cursorpos = {};
+        xui::vec2 _cursorold = {};
+        std::vector<xui::vec2> _touchs;
+        std::array<int, (size_t)xui::event::EVENT_MAX_COUNT> _events = { 0 };
     };
 
     std::wstring ansi_wide( std::string_view str )
@@ -129,43 +131,43 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         if ( it != _p->_windows.end() )
             id = std::distance( _p->_windows.begin(), it );
 
-        if ( msg.message == WM_DESTROY )
-        {
-            std::cout << "WM_DESTROY" << std::endl;
-            break;
-        }
-        else if ( msg.message == WM_QUIT )
+        if ( msg.message == WM_QUIT )
         {
             std::cout << "WM_QUIT" << std::endl;
             break;
         }
+        else if ( msg.message == WM_DESTROY )
+        {
+            std::cout << "WM_DESTROY" << std::endl;
+            break;
+        }
         else if ( msg.message == WM_LBUTTONDOWN )
         {
-            set_event( id, xui::KEY_MOUSE_LEFT, 1 );
+            set_event( id, xui::event::KEY_MOUSE_LEFT, 1 );
 
             std::cout << "WM_LBUTTONDOWN" << std::endl;
         }
         else if ( msg.message == WM_RBUTTONDOWN )
         {
-            set_event( id, xui::KEY_MOUSE_RIGHT, 1 );
+            set_event( id, xui::event::KEY_MOUSE_RIGHT, 1 );
 
             std::cout << "WM_RBUTTONDOWN" << std::endl;
         }
         else if ( msg.message == WM_MOUSEWHEEL )
         {
-            set_event( id, xui::MOUSE_WHEEL, ( int( msg.wParam ) / WHEEL_DELTA ) );
+            set_event( id, xui::event::MOUSE_WHEEL, ( int( msg.wParam ) / WHEEL_DELTA ) );
             
             std::cout << "WM_MOUSEWHEEL: " << std::dec << ( int( msg.wParam ) / WHEEL_DELTA ) << std::endl;
         }
         else if ( msg.message == WM_LBUTTONUP )
         {
-            set_event( id, xui::KEY_MOUSE_LEFT, 0 );
+            set_event( id, xui::event::KEY_MOUSE_LEFT, 0 );
 
             std::cout << "WM_LBUTTONUP" << std::endl;
         }
         else if ( msg.message == WM_RBUTTONUP )
         {
-            set_event( id, xui::KEY_MOUSE_RIGHT, 0 );
+            set_event( id, xui::event::KEY_MOUSE_RIGHT, 0 );
 
             std::cout << "WM_RBUTTONUP" << std::endl;
         }
@@ -178,16 +180,16 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
             tme.hwndTrack = msg.hwnd;
             TrackMouseEvent( &tme );
 
-            set_event( id, xui::MOUSE_ENTER, 1 );
-            set_event( id, xui::MOUSE_LEAVE, 0 );
-            set_event( id, xui::MOUSE_MOVE, msg.lParam );
+            set_event( id, xui::event::MOUSE_ENTER, 1 );
+            set_event( id, xui::event::MOUSE_LEAVE, 0 );
+            set_event( id, xui::event::MOUSE_MOVE, msg.lParam );
 
             std::cout << "WM_MOUSEMOVE: " << std::dec << GET_X_LPARAM( msg.lParam ) << ":" << GET_Y_LPARAM( msg.lParam ) << std::endl;
         }
         else if ( msg.message == WM_MOUSELEAVE )
         {
-            set_event( id, xui::MOUSE_ENTER, 0 );
-            set_event( id, xui::MOUSE_LEAVE, 1 );
+            set_event( id, xui::event::MOUSE_ENTER, 0 );
+            set_event( id, xui::event::MOUSE_LEAVE, 1 );
 
             std::cout << "WM_MOUSELEAVE" << std::endl;
         }
@@ -203,22 +205,42 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         {
             std::cout << "WA_ACTIVE" << std::endl;
         }
+        else if ( msg.message == WM_TOUCH )
+        {
+            auto & map = _p->_eventmap[id];
+            map._touchs.clear();
+
+            TOUCHINPUT inputs[15];
+            UINT count = LOWORD( msg.wParam );
+
+            if ( GetTouchInputInfo( (HTOUCHINPUT)msg.lParam, count, inputs, sizeof( TOUCHINPUT ) ) )
+            {
+                for ( size_t i = 0; i < count; i++ )
+                {
+                    map._touchs.push_back( { (float)inputs[i].x, (float)inputs[i].y } );
+                }
+            }
+        }
+        else if ( msg.message == WM_TIMER )
+        {
+            std::cout << "WM_TIMER" << std::endl;
+        }
         else if ( msg.message == WM_CLOSE )
         {
-            set_event( id, xui::WINDOW_CLOSE, 1 );
+            _p->_eventmap.erase( id );
 
+            UnregisterTouchWindow( msg.hwnd );
             DestroyWindow( msg.hwnd );
-            
-            if ( std::find_if( _p->_windows.begin(), _p->_windows.end(), []( const auto & val ) { return val.hwnd != nullptr; } ) == _p->_windows.end() )
+
+            if ( std::find_if( _p->_windows.begin(), _p->_windows.end(), []( const auto & val )
+            {
+                return val.hwnd != nullptr;
+            } ) == _p->_windows.end() )
             {
                 PostQuitMessage( 0 );
             }
 
             std::cout << "WM_CLOSE" << std::endl;
-        }
-        else if ( msg.message == WM_TIMER )
-        {
-            std::cout << "WM_TIMER" << std::endl;
         }
         else if ( msg.message == WM_SIZE )
         {
@@ -238,6 +260,19 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
 
             std::cout << "WM_SIZE" << std::endl;
         }
+        else if ( msg.message == WM_KEYDOWN )
+        {
+            std::cout << "WM_KEYDOWN" << std::endl;
+        }
+        else if ( msg.message == WM_KEYUP )
+        {
+            std::cout << "WM_KEYDOWN" << std::endl;
+        }
+        else if ( msg.message == WM_CHAR )
+        {
+            std::wcout << L"WM_KEYDOWN";
+            std::cout << "WM_KEYDOWN" << std::endl;
+        }
         else
         {
             std::cout << "0x" << std::hex << std::setfill( '0' ) << std::setw( 4 ) << msg.message << std::endl;
@@ -248,6 +283,8 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         DispatchMessageA( &msg );
 
         render( paint() );
+
+        present();
     }
 }
 
@@ -304,6 +341,7 @@ xui::window_id gdi_implement::create_window( std::string_view title, xui::textur
 
     ShowWindow( w.hwnd, SW_SHOW );
     SetActiveWindow( w.hwnd );
+    RegisterTouchWindow( w.hwnd, 0 );
 
     _p->_windows[id] = w;
 
@@ -339,7 +377,7 @@ void gdi_implement::set_window_parent( xui::window_id id, xui::window_id parent 
     SetParent( _p->_windows[id].hwnd, parent == xui::invalid_id ? nullptr : _p->_windows[parent].hwnd );
 }
 
-xui::windowstatus gdi_implement::get_window_status( xui::window_id id ) const
+xui::window_status gdi_implement::get_window_status( xui::window_id id ) const
 {
     int status = 0;
 
@@ -347,36 +385,36 @@ xui::windowstatus gdi_implement::get_window_status( xui::window_id id ) const
     {
         if ( ( ::GetWindowLongA( _p->_windows[id].hwnd, GWL_STYLE ) & WS_VISIBLE ) != 0 )
         {
-            status |= xui::windowstatus::SHOW;
+            status |= xui::window_status::WINDOW_SHOW;
 
             if ( IsIconic( _p->_windows[id].hwnd ) )
-                status |= xui::windowstatus::MINIMIZE;
+                status |= xui::window_status::WINDOW_MINIMIZE;
             else if ( IsZoomed( _p->_windows[id].hwnd ) )
-                status |= xui::windowstatus::MAXIMIZE;
+                status |= xui::window_status::WINDOW_MAXIMIZE;
         }
         else
         {
-            status |= xui::windowstatus::HIDE;
+            status |= xui::window_status::WINDOW_HIDE;
         }
     }
 
-    return xui::windowstatus( status );
+    return xui::window_status( status );
 }
 
-void gdi_implement::set_window_status( xui::window_id id, xui::windowstatus show )
+void gdi_implement::set_window_status( xui::window_id id, xui::window_status show )
 {
     if ( id >= _p->_windows.size() )
         return;
 
     switch ( show )
     {
-    case xui::SHOW:
+    case xui::window_status::WINDOW_SHOW:
         ShowWindow( _p->_windows[id].hwnd, SW_SHOW );
         break;
-    case xui::HIDE:
+    case xui::window_status::WINDOW_HIDE:
         ShowWindow( _p->_windows[id].hwnd, SW_HIDE );
         break;
-    case xui::RESTORE:
+    case xui::window_status::WINDOW_RESTORE:
     {
         ShowWindow( _p->_windows[id].hwnd, SW_RESTORE );
 
@@ -391,10 +429,10 @@ void gdi_implement::set_window_status( xui::window_id id, xui::windowstatus show
         PostMessageA( _p->_windows[id].hwnd, WM_TIMER, 0, 0 );
     }
         break;
-    case xui::MINIMIZE:
+    case xui::window_status::WINDOW_MINIMIZE:
         ShowWindow( _p->_windows[id].hwnd, SW_MINIMIZE );
         break;
-    case xui::MAXIMIZE:
+    case xui::window_status::WINDOW_MAXIMIZE:
     {
         ShowWindow( _p->_windows[id].hwnd, SW_MAXIMIZE );
         _p->_windows[id].rrect = _p->_windows[id].rect;
@@ -636,14 +674,7 @@ void gdi_implement::set_event( xui::window_id id, xui::event key, int val )
 {
     if ( id != xui::invalid_id )
     {
-        if ( key > xui::event::WINDOW_EVENT_BEG && key <= xui::event::WINDOW_EVENT_END )
-        {
-            if ( key == xui::event::WINDOW_CLOSE )
-            {
-                _p->_eventmap.erase( id );
-            }
-        }
-        else if ( key > xui::event::MOUSE_EVENT_BEG && key <= xui::event::MOUSE_EVENT_END )
+        if ( key > xui::event::MOUSE_EVENT_BEG && key <= xui::event::MOUSE_EVENT_END )
         {
             switch ( key )
             {
@@ -653,26 +684,31 @@ void gdi_implement::set_event( xui::window_id id, xui::event key, int val )
                 break;
             }
 
-            _p->_eventmap[id]._events[key] = val;
+            _p->_eventmap[id]._events[(size_t)key] = val;
         }
         else if ( key > xui::event::KEY_EVENT_BEG && key <= xui::event::KEY_EVENT_END )
         {
             if ( val == 0 )
-                _p->_eventmap[id]._events[key] = val;
+                _p->_eventmap[id]._events[(size_t)key] = val;
             else
-                _p->_eventmap[id]._events[key] += val;
+                _p->_eventmap[id]._events[(size_t)key] += val;
         }
     }
 }
 
-int gdi_implement::get_key( xui::window_id id, xui::event key ) const
-{
-    return _p->_eventmap[id][key];
-}
-
-xui::vec2 gdi_implement::get_cursor_pos( xui::window_id id ) const
+xui::vec2 gdi_implement::get_cursor( xui::window_id id ) const
 {
     return _p->_eventmap[id].pos();
+}
+
+int gdi_implement::get_event( xui::window_id id, xui::event key ) const
+{
+    return _p->_eventmap[id][(size_t)key];
+}
+
+std::span<xui::vec2> gdi_implement::get_touchs( xui::window_id id ) const
+{
+    return _p->_eventmap[id]._touchs;
 }
 
 void gdi_implement::present()
@@ -693,6 +729,22 @@ void gdi_implement::present()
             UpdateLayeredWindow( _p->_windows[id].hwnd, nullptr, nullptr, &size, _p->_hdc, &point, 0, &blend, ULW_ALPHA );
         }
         SelectObject( _p->_hdc, old_bitmap );
+    }
+
+    for ( auto & it : _p->_eventmap )
+    {
+        for ( int i = 0; i < it.second._events.size(); i++ )
+        {
+            if ( i > ( size_t )xui::event::MOUSE_EVENT_BEG && i <= (size_t)xui::event::MOUSE_EVENT_END )
+            {
+                if ( i == (size_t)xui::event::MOUSE_WHEEL )
+                    it.second._events[i] = 0;
+            }
+            else if ( ( i > (size_t)xui::event::KEY_EVENT_BEG && i <= (size_t)xui::event::KEY_EVENT_END ) && it.second._events[(size_t)xui::event::MOUSE_LEAVE] != 0 )
+            {
+                it.second._events[i] = 0;
+            }
+        }
     }
 }
 
@@ -728,18 +780,18 @@ void gdi_implement::render( std::span<xui::drawcmd> cmds )
 
                 Gdiplus::StringFormat fmt;
 
-                if ( ( element.align & xui::alignment_flag::LEFT ) != 0 )
+                if ( ( element.align & xui::alignment_flag::ALIGN_LEFT ) != 0 )
                     fmt.SetAlignment( Gdiplus::StringAlignment::StringAlignmentNear );
-                else if ( ( element.align & xui::alignment_flag::RIGHT ) != 0 )
+                else if ( ( element.align & xui::alignment_flag::ALIGN_RIGHT ) != 0 )
                     fmt.SetAlignment( Gdiplus::StringAlignment::StringAlignmentFar );
-                if ( ( element.align & xui::alignment_flag::HCENTER ) != 0 )
+                if ( ( element.align & xui::alignment_flag::ALIGN_HCENTER ) != 0 )
                     fmt.SetAlignment( Gdiplus::StringAlignment::StringAlignmentCenter );
 
-                if ( ( element.align & xui::alignment_flag::TOP ) != 0 )
+                if ( ( element.align & xui::alignment_flag::ALIGN_TOP ) != 0 )
                     fmt.SetLineAlignment( Gdiplus::StringAlignment::StringAlignmentNear );
-                else if ( ( element.align & xui::alignment_flag::BOTTOM ) != 0 )
+                else if ( ( element.align & xui::alignment_flag::ALIGN_BOTTOM ) != 0 )
                     fmt.SetLineAlignment( Gdiplus::StringAlignment::StringAlignmentFar );
-                if ( ( element.align & xui::alignment_flag::VCENTER ) != 0 )
+                if ( ( element.align & xui::alignment_flag::ALIGN_VCENTER ) != 0 )
                     fmt.SetLineAlignment( Gdiplus::StringAlignment::StringAlignmentCenter );
 
                 g.DrawString( wtext.c_str(), wtext.size(), _p->_fonts[element.font].font, Gdiplus::RectF( element.rect.x, element.rect.y, element.rect.w, element.rect.h ), &fmt, &brush );
@@ -926,26 +978,4 @@ void gdi_implement::render( std::span<xui::drawcmd> cmds )
     }
     
     if ( old_obj != nullptr ) SelectObject( _p->_hdc, old_obj );
-
-    present();
-
-    for ( auto & it : _p->_eventmap )
-    {
-        for ( int i = 0; i < it.second._events.size(); i++ )
-        {
-            if ( i > xui::event::WINDOW_EVENT_BEG && i <= xui::event::WINDOW_EVENT_END )
-            {
-                it.second._events[i] = 0;
-            }
-            else if ( i > xui::event::MOUSE_EVENT_BEG && i <= xui::event::MOUSE_EVENT_END )
-            {
-                if ( i == xui::event::MOUSE_WHEEL )
-                    it.second._events[i] = 0;
-            }
-            else if ( i > xui::event::KEY_EVENT_BEG && i <= xui::event::KEY_EVENT_END )
-            {
-                it.second._events[i] = max( it.second._events[i] - 1, 0 );
-            }
-        }
-    }
 }
