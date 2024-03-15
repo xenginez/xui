@@ -13,25 +13,6 @@
 
 namespace
 {
-    struct font
-    {
-        int size;
-        std::string family;
-        xui::font_flag flag;
-        Gdiplus::Font * font;
-    };
-    struct window
-    {
-        HWND hwnd = nullptr;
-        xui::rect rect;
-        xui::rect rrect;
-        HBITMAP frame_buffer = nullptr;
-    };
-    struct texture
-    {
-        std::string name;
-        Gdiplus::Image * image;
-    };
     struct eventmap
     {
     public:
@@ -53,10 +34,49 @@ namespace
         }
 
     public:
+        void flush()
+        {
+            _unicodes.clear();
+
+            for ( size_t i = 0; i < xui::event::EVENT_MAX_COUNT; i++ )
+            {
+                if ( _release[i] == 1 )
+                {
+                    _press[i] = 0;
+                    _release[i] = 0;
+                }
+
+                if ( _press[i] > 0 ) _press[i] += 1;
+            }
+        }
+
+    public:
         xui::vec2 _cursorpos = {};
         xui::vec2 _cursorold = {};
+        std::wstring _unicodes = {};
         std::vector<xui::vec2> _touchs;
-        std::array<int, (size_t)xui::event::EVENT_MAX_COUNT> _events = { 0 };
+        std::array<int, (size_t)xui::event::EVENT_MAX_COUNT> _press = { 0 };
+        std::array<int, (size_t)xui::event::EVENT_MAX_COUNT> _release = { 0 };
+    };
+    struct texture
+    {
+        std::string name;
+        Gdiplus::Image * image;
+    };
+    struct window
+    {
+        HWND hwnd = nullptr;
+        xui::rect rect;
+        xui::rect rrect;
+        eventmap events;
+        HBITMAP frame_buffer = nullptr;
+    };
+    struct font
+    {
+        int size;
+        std::string family;
+        xui::font_flag flag;
+        Gdiplus::Font * font;
     };
 
     std::wstring ansi_wide( std::string_view str )
@@ -69,6 +89,142 @@ namespace
 
         return wstr;
     }
+    std::string wide_ansi( std::wstring_view wstr )
+    {
+        int len = WideCharToMultiByte( CP_ACP, 0, wstr.data(), wstr.size(), NULL, 0, 0, 0 );
+
+        std::string str( len, 0 );
+
+        len = WideCharToMultiByte( CP_ACP, 0, wstr.data(), wstr.size(), str.data(), len, 0, 0 );
+
+        return str;
+    }
+    xui::event key_event( WPARAM wParam )
+    {
+        switch ( wParam )
+        {
+        case VK_TAB: return xui::event::KEY_TAB;
+        case VK_LEFT: return xui::event::KEY_LEFT_ARROW;
+        case VK_RIGHT: return xui::event::KEY_RIGHT_ARROW;
+        case VK_UP: return xui::event::KEY_UP_ARROW;
+        case VK_DOWN: return xui::event::KEY_DOWN_ARROW;
+        case VK_PRIOR: return xui::event::KEY_PAGE_UP;
+        case VK_NEXT: return xui::event::KEY_PAGE_DOWN;
+        case VK_HOME: return xui::event::KEY_HOME;
+        case VK_END: return xui::event::KEY_END;
+        case VK_INSERT: return xui::event::KEY_INSERT;
+        case VK_DELETE: return xui::event::KEY_DELETE;
+        case VK_BACK: return xui::event::KEY_BACKSPACE;
+        case VK_SPACE: return xui::event::KEY_SPACE;
+        case VK_RETURN: return xui::event::KEY_ENTER;
+        case VK_ESCAPE: return xui::event::KEY_ESCAPE;
+        case VK_OEM_7: return xui::event::KEY_APOSTROPHE;
+        case VK_OEM_COMMA: return xui::event::KEY_COMMA;
+        case VK_OEM_MINUS: return xui::event::KEY_MINUS;
+        case VK_OEM_PERIOD: return xui::event::KEY_PERIOD;
+        case VK_OEM_2: return xui::event::KEY_SLASH;
+        case VK_OEM_1: return xui::event::KEY_SEMICOLON;
+        case VK_OEM_PLUS: return xui::event::KEY_EQUAL;
+        case VK_OEM_4: return xui::event::KEY_LEFT_BRACKET;
+        case VK_OEM_5: return xui::event::KEY_BACKSLASH;
+        case VK_OEM_6: return xui::event::KEY_RIGHT_BRACKET;
+        case VK_OEM_3: return xui::event::KEY_GRAVE_ACCENT;
+        case VK_CAPITAL: return xui::event::KEY_CAPS_LOCK;
+        case VK_SCROLL: return xui::event::KEY_SCROLL_LOCK;
+        case VK_NUMLOCK: return xui::event::KEY_NUM_LOCK;
+        case VK_SNAPSHOT: return xui::event::KEY_PRINT_SCREEN;
+        case VK_PAUSE: return xui::event::KEY_PAUSE;
+        case VK_NUMPAD0: return xui::event::KEY_KEYPAD_0;
+        case VK_NUMPAD1: return xui::event::KEY_KEYPAD_1;
+        case VK_NUMPAD2: return xui::event::KEY_KEYPAD_2;
+        case VK_NUMPAD3: return xui::event::KEY_KEYPAD_3;
+        case VK_NUMPAD4: return xui::event::KEY_KEYPAD_4;
+        case VK_NUMPAD5: return xui::event::KEY_KEYPAD_5;
+        case VK_NUMPAD6: return xui::event::KEY_KEYPAD_6;
+        case VK_NUMPAD7: return xui::event::KEY_KEYPAD_7;
+        case VK_NUMPAD8: return xui::event::KEY_KEYPAD_8;
+        case VK_NUMPAD9: return xui::event::KEY_KEYPAD_9;
+        case VK_DECIMAL: return xui::event::KEY_KEYPAD_DECIMAL;
+        case VK_DIVIDE: return xui::event::KEY_KEYPAD_DIVIDE;
+        case VK_MULTIPLY: return xui::event::KEY_KEYPAD_MULTIPLY;
+        case VK_SUBTRACT: return xui::event::KEY_KEYPAD_SUBTRACT;
+        case VK_ADD: return xui::event::KEY_KEYPAD_ADD;
+//        case IM_VK_KEYPAD_ENTER: return xui::EVENT::KEY_KEYPAD_ENTER;
+        case VK_LSHIFT: return xui::event::KEY_LEFT_SHIFT;
+        case VK_LCONTROL: return xui::event::KEY_LEFT_CTRL;
+        case VK_LMENU: return xui::event::KEY_LEFT_ALT;
+        case VK_LWIN: return xui::event::KEY_LEFT_SUPER;
+        case VK_RSHIFT: return xui::event::KEY_RIGHT_SHIFT;
+        case VK_RCONTROL: return xui::event::KEY_RIGHT_CTRL;
+        case VK_RMENU: return xui::event::KEY_RIGHT_ALT;
+        case VK_RWIN: return xui::event::KEY_RIGHT_SUPER;
+        case VK_APPS: return xui::event::KEY_MENU;
+        case '0': return xui::event::KEY_0;
+        case '1': return xui::event::KEY_1;
+        case '2': return xui::event::KEY_2;
+        case '3': return xui::event::KEY_3;
+        case '4': return xui::event::KEY_4;
+        case '5': return xui::event::KEY_5;
+        case '6': return xui::event::KEY_6;
+        case '7': return xui::event::KEY_7;
+        case '8': return xui::event::KEY_8;
+        case '9': return xui::event::KEY_9;
+        case 'A': return xui::event::KEY_A;
+        case 'B': return xui::event::KEY_B;
+        case 'C': return xui::event::KEY_C;
+        case 'D': return xui::event::KEY_D;
+        case 'E': return xui::event::KEY_E;
+        case 'F': return xui::event::KEY_F;
+        case 'G': return xui::event::KEY_G;
+        case 'H': return xui::event::KEY_H;
+        case 'I': return xui::event::KEY_I;
+        case 'J': return xui::event::KEY_J;
+        case 'K': return xui::event::KEY_K;
+        case 'L': return xui::event::KEY_L;
+        case 'M': return xui::event::KEY_M;
+        case 'N': return xui::event::KEY_N;
+        case 'O': return xui::event::KEY_O;
+        case 'P': return xui::event::KEY_P;
+        case 'Q': return xui::event::KEY_Q;
+        case 'R': return xui::event::KEY_R;
+        case 'S': return xui::event::KEY_S;
+        case 'T': return xui::event::KEY_T;
+        case 'U': return xui::event::KEY_U;
+        case 'V': return xui::event::KEY_V;
+        case 'W': return xui::event::KEY_W;
+        case 'X': return xui::event::KEY_X;
+        case 'Y': return xui::event::KEY_Y;
+        case 'Z': return xui::event::KEY_Z;
+        case VK_F1: return xui::event::KEY_F1;
+        case VK_F2: return xui::event::KEY_F2;
+        case VK_F3: return xui::event::KEY_F3;
+        case VK_F4: return xui::event::KEY_F4;
+        case VK_F5: return xui::event::KEY_F5;
+        case VK_F6: return xui::event::KEY_F6;
+        case VK_F7: return xui::event::KEY_F7;
+        case VK_F8: return xui::event::KEY_F8;
+        case VK_F9: return xui::event::KEY_F9;
+        case VK_F10: return xui::event::KEY_F10;
+        case VK_F11: return xui::event::KEY_F11;
+        case VK_F12: return xui::event::KEY_F12;
+        case VK_F13: return xui::event::KEY_F13;
+        case VK_F14: return xui::event::KEY_F14;
+        case VK_F15: return xui::event::KEY_F15;
+        case VK_F16: return xui::event::KEY_F16;
+        case VK_F17: return xui::event::KEY_F17;
+        case VK_F18: return xui::event::KEY_F18;
+        case VK_F19: return xui::event::KEY_F19;
+        case VK_F20: return xui::event::KEY_F20;
+        case VK_F21: return xui::event::KEY_F21;
+        case VK_F22: return xui::event::KEY_F22;
+        case VK_F23: return xui::event::KEY_F23;
+        case VK_F24: return xui::event::KEY_F24;
+        case VK_BROWSER_BACK: return xui::event::KEY_APP_BACK;
+        case VK_BROWSER_FORWARD: return xui::event::KEY_APP_FORWARD;
+        }
+
+        return xui::event::EVENT_MAX_COUNT;
+    }
 }
 
 struct gdi_implement::private_p
@@ -79,8 +235,7 @@ struct gdi_implement::private_p
     std::vector<window> _windows;
     std::vector<texture> _textures;
     Gdiplus::PrivateFontCollection _collection;
-    std::array<Gdiplus::FontFamily, 64> _familys;
-    std::map<xui::window_id, eventmap> _eventmap;
+    std::array<Gdiplus::FontFamily, 100> _familys;
 };
 
 gdi_implement::gdi_implement()
@@ -161,13 +316,13 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         }
         else if ( msg.message == WM_LBUTTONUP )
         {
-            set_event( id, xui::event::KEY_MOUSE_LEFT, 0 );
+            set_event( id, xui::event::KEY_MOUSE_LEFT, -1 );
 
             std::cout << "WM_LBUTTONUP" << std::endl;
         }
         else if ( msg.message == WM_RBUTTONUP )
         {
-            set_event( id, xui::event::KEY_MOUSE_RIGHT, 0 );
+            set_event( id, xui::event::KEY_MOUSE_RIGHT, -1 );
 
             std::cout << "WM_RBUTTONUP" << std::endl;
         }
@@ -207,8 +362,7 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         }
         else if ( msg.message == WM_TOUCH )
         {
-            auto & map = _p->_eventmap[id];
-            map._touchs.clear();
+            _p->_windows[id].events._touchs.clear();
 
             TOUCHINPUT inputs[15];
             UINT count = LOWORD( msg.wParam );
@@ -217,7 +371,7 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
             {
                 for ( size_t i = 0; i < count; i++ )
                 {
-                    map._touchs.push_back( { (float)inputs[i].x, (float)inputs[i].y } );
+                    _p->_windows[id].events._touchs.push_back( { (float)inputs[i].x, (float)inputs[i].y } );
                 }
             }
         }
@@ -227,8 +381,6 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         }
         else if ( msg.message == WM_CLOSE )
         {
-            _p->_eventmap.erase( id );
-
             UnregisterTouchWindow( msg.hwnd );
             DestroyWindow( msg.hwnd );
 
@@ -262,16 +414,29 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         }
         else if ( msg.message == WM_KEYDOWN )
         {
+            auto key = key_event( msg.wParam );
+            if ( key != xui::event::EVENT_MAX_COUNT )
+            {
+                set_event( id, key, 1 );
+            }
+
             std::cout << "WM_KEYDOWN" << std::endl;
         }
         else if ( msg.message == WM_KEYUP )
         {
-            std::cout << "WM_KEYDOWN" << std::endl;
+            auto key = key_event( msg.wParam );
+            if ( key != xui::event::EVENT_MAX_COUNT )
+            {
+                set_event( id, key, -1 );
+            }
+
+            std::cout << "WM_KEYUP" << std::endl;
         }
         else if ( msg.message == WM_CHAR )
         {
-            std::wcout << L"WM_KEYDOWN";
-            std::cout << "WM_KEYDOWN" << std::endl;
+            _p->_windows[id].events._unicodes.push_back( (wchar_t)msg.wParam );
+
+            std::wcout << L"WM_CHAR: \'" << (wchar_t)msg.wParam << L"\'" << std::endl;
         }
         else
         {
@@ -546,7 +711,7 @@ xui::font_id gdi_implement::create_font( std::string_view family, int size, xui:
     fnt.size = size;
     fnt.flag = flag;
     fnt.family = family;
-    if ( family == xui::system_resource::FONT_DEFAULT )
+    if ( family == system_resource::FONT_DEFAULT )
     {
         fnt.font = new Gdiplus::Font( L"ËÎÌו", size, flag, Gdiplus::UnitPixel );
         _p->_fonts[id] = fnt;
@@ -634,10 +799,10 @@ xui::texture_id gdi_implement::create_texture( std::string_view filename )
     {
         LPSTR icon_id;
 
-        if ( filename == xui::system_resource::ICON_APPLICATION ) icon_id = IDI_APPLICATION;
-        else if ( filename == xui::system_resource::ICON_ERROR ) icon_id = IDI_ERROR;
-        else if ( filename == xui::system_resource::ICON_WARNING ) icon_id = IDI_WARNING;
-        else if ( filename == xui::system_resource::ICON_INFORMATION ) icon_id = IDI_INFORMATION;
+        if ( filename == system_resource::ICON_APPLICATION ) icon_id = IDI_APPLICATION;
+        else if ( filename == system_resource::ICON_ERROR ) icon_id = IDI_ERROR;
+        else if ( filename == system_resource::ICON_WARNING ) icon_id = IDI_WARNING;
+        else if ( filename == system_resource::ICON_INFORMATION ) icon_id = IDI_INFORMATION;
         
         tex.image = Gdiplus::Bitmap::FromHICON( LoadIconA( nullptr, icon_id ) );
     }
@@ -670,7 +835,7 @@ void gdi_implement::remove_texture( xui::texture_id id )
     _p->_textures[id].image = nullptr;
 }
 
-void gdi_implement::set_event( xui::window_id id, xui::event key, int val )
+void gdi_implement::set_event( xui::window_id id, xui::event key, xui::action act )
 {
     if ( id != xui::invalid_id )
     {
@@ -679,46 +844,108 @@ void gdi_implement::set_event( xui::window_id id, xui::event key, int val )
             switch ( key )
             {
             case xui::event::MOUSE_MOVE:
-                _p->_eventmap[id]._cursorold = _p->_eventmap[id]._cursorpos;
-                _p->_eventmap[id]._cursorpos = { (float)( val & 0xFFFF ), (float)( ( val >> 16 ) & 0xFFFF ) };
+                _p->_windows[id].events._cursorold =_p->_windows[id].events._cursorpos;
+               _p->_windows[id].events._cursorpos = { (float)( val & 0xFFFF ), (float)( ( val >> 16 ) & 0xFFFF ) };
                 break;
             }
 
-            _p->_eventmap[id]._events[(size_t)key] = val;
+           _p->_windows[id].events._events[(size_t)key] = val;
         }
         else if ( key > xui::event::KEY_EVENT_BEG && key <= xui::event::KEY_EVENT_END )
         {
             if ( val == 0 )
-                _p->_eventmap[id]._events[(size_t)key] = val;
+               _p->_windows[id].events._events[(size_t)key] = val;
             else
-                _p->_eventmap[id]._events[(size_t)key] += val;
+               _p->_windows[id].events._events[(size_t)key] += val;
         }
     }
 }
 
-xui::vec2 gdi_implement::get_cursor( xui::window_id id ) const
+std::string gdi_implement::get_clipboard_data( xui::window_id id, std::string_view mime ) const
 {
-    return _p->_eventmap[id].pos();
+    std::string result;
+
+    if ( OpenClipboard( _p->_windows[id].hwnd ) )
+    {
+        auto fmt = RegisterClipboardFormatA( mime.data() );
+        if ( fmt != 0 )
+        {
+            HANDLE h_data = GetClipboardData( fmt );
+            if ( h_data != NULL )
+            {
+                auto p_data = (const char *)GlobalLock( h_data );
+                if ( p_data != nullptr )
+                {
+                    result = p_data;
+                    GlobalUnlock( h_data );
+                }
+            }
+        }
+        CloseClipboard();
+    }
+
+    return result;
 }
 
-int gdi_implement::get_event( xui::window_id id, xui::event key ) const
+bool gdi_implement::set_clipboard_data( xui::window_id id, std::string_view mime, std::string_view data )
 {
-    return _p->_eventmap[id][(size_t)key];
+    bool result = false;
+
+    if ( OpenClipboard( _p->_windows[id].hwnd ) )
+    {
+        EmptyClipboard();
+
+        auto fmt = RegisterClipboardFormatA( mime.data() );
+        if ( fmt != 0 )
+        {
+            HANDLE h_data = GlobalAlloc( GMEM_MOVEABLE, data.size() + 1 );
+            if ( h_data != nullptr )
+            {
+                auto p_data = (char *)GlobalLock( h_data );
+                if ( p_data != nullptr )
+                {
+                    memset( p_data, 0, data.size() + 1 );
+                    memcpy( p_data, data.data(), data.size() );
+                    GlobalUnlock( h_data );
+                    result = true;
+                }
+                SetClipboardData( fmt, h_data );
+            }
+        }
+        CloseClipboard();
+    }
+
+    return result;
+}
+
+xui::vec2 gdi_implement::get_cursor( xui::window_id id ) const
+{
+    return _p->_windows[id].events.pos();
+}
+
+std::string gdi_implement::get_unicodes( xui::window_id id ) const
+{
+    return wide_ansi( _p->_windows[id].events._unicodes );
+}
+
+int gdi_implement::get_event( xui::window_id id, xui::event key, xui::action act ) const
+{
+    return _p->_windows[id].events[(size_t)key];
 }
 
 std::span<xui::vec2> gdi_implement::get_touchs( xui::window_id id ) const
 {
-    return _p->_eventmap[id]._touchs;
+    return _p->_windows[id].events._touchs;
 }
 
 void gdi_implement::present()
 {
-    for ( size_t id = 0; id < _p->_windows.size(); id++ )
+    for ( auto & it : _p->_windows )
     {
-        HGDIOBJ old_bitmap = SelectObject( _p->_hdc, (HGDIOBJ)_p->_windows[id].frame_buffer );
+        HGDIOBJ old_bitmap = SelectObject( _p->_hdc, (HGDIOBJ)it.frame_buffer );
         {
             POINT point = { 0, 0 };
-            SIZE size = { _p->_windows[id].rect.w, _p->_windows[id].rect.h };
+            SIZE size = { it.rect.w, it.rect.h };
 
             BLENDFUNCTION blend = {};
             blend.BlendOp = AC_SRC_OVER;
@@ -726,25 +953,11 @@ void gdi_implement::present()
             blend.SourceConstantAlpha = 255;
             blend.AlphaFormat = AC_SRC_ALPHA;
 
-            UpdateLayeredWindow( _p->_windows[id].hwnd, nullptr, nullptr, &size, _p->_hdc, &point, 0, &blend, ULW_ALPHA );
+            UpdateLayeredWindow( it.hwnd, nullptr, nullptr, &size, _p->_hdc, &point, 0, &blend, ULW_ALPHA );
         }
         SelectObject( _p->_hdc, old_bitmap );
-    }
 
-    for ( auto & it : _p->_eventmap )
-    {
-        for ( int i = 0; i < it.second._events.size(); i++ )
-        {
-            if ( i > ( size_t )xui::event::MOUSE_EVENT_BEG && i <= (size_t)xui::event::MOUSE_EVENT_END )
-            {
-                if ( i == (size_t)xui::event::MOUSE_WHEEL )
-                    it.second._events[i] = 0;
-            }
-            else if ( ( i > (size_t)xui::event::KEY_EVENT_BEG && i <= (size_t)xui::event::KEY_EVENT_END ) && it.second._events[(size_t)xui::event::MOUSE_LEAVE] != 0 )
-            {
-                it.second._events[i] = 0;
-            }
-        }
+        it.events.flush();
     }
 }
 
@@ -801,9 +1014,8 @@ void gdi_implement::render( std::span<xui::drawcmd> cmds )
                 Gdiplus::Graphics g( _p->_hdc );
                 g.SetSmoothingMode( Gdiplus::SmoothingModeHighQuality );
 
-                Gdiplus::Pen pen( Gdiplus::Color( element.stroke.color.a, element.stroke.color.r, element.stroke.color.g, element.stroke.color.b ), element.stroke.width );
-
-                g.DrawLine( &pen, Gdiplus::PointF{ element.p1.x, element.p1.y }, Gdiplus::PointF{ element.p2.x, element.p2.y } );
+                auto pen = create_pen( element.stroke );
+                g.DrawLine( pen.get(), Gdiplus::PointF{ element.p1.x, element.p1.y }, Gdiplus::PointF{ element.p2.x, element.p2.y } );
             },
             [&]( const xui::drawcmd::rect_element & element )
             {
@@ -830,14 +1042,12 @@ void gdi_implement::render( std::span<xui::drawcmd> cmds )
                 path.AddArc( element.rect.x, element.rect.y + element.rect.h - radius, radius, radius, 90, 90 );
                 path.AddLine( element.rect.x, element.rect.y + element.rect.h - element.border.radius.w, element.rect.x, element.rect.y + element.border.radius.x );
 
-                if ( element.filled.color.a != 0 )
+                if ( element.filled.colors.index() != 0 )
                 {
-                    Gdiplus::SolidBrush brush( Gdiplus::Color( element.filled.color.a, element.filled.color.r, element.filled.color.g, element.filled.color.b ) );
-                    g.FillPath( &brush, &path );
+                    g.FillPath( create_brush( element.filled ).get(), &path );
                 }
 
-                Gdiplus::Pen pen( Gdiplus::Color( element.border.color.a, element.border.color.r, element.border.color.g, element.border.color.b ), element.border.width );
-                g.DrawPath( &pen, &path );
+                g.DrawPath( create_pen( element.border ).get(), &path );
             },
             [&]( const xui::drawcmd::path_element & element )
             {
@@ -845,29 +1055,31 @@ void gdi_implement::render( std::span<xui::drawcmd> cmds )
                 g.SetSmoothingMode( Gdiplus::SmoothingModeHighQuality );
 
                 Gdiplus::GraphicsPath path;
-                Gdiplus::Pen pen( Gdiplus::Color( element.stroke.color.a, element.stroke.color.r, element.stroke.color.g, element.stroke.color.b ), element.stroke.width );
 
                 auto it = element.data.begin();
-                auto ppoint = []( auto & it ) -> xui::vec2
+                auto f = []( auto & it )
+                {
+                    auto beg = it;
+                    while ( std::isdigit( *it ) || *it == '.' ) it++;
+
+                    float value = 0;
+                    std::from_chars( beg.operator->(), it.operator->(), value );
+                    return value;
+                };
+                auto ppoint = [f]( auto & it ) -> xui::vec2
                 {
                     xui::vec2 p;
 
-                    auto beg = it;
-                    while ( std::isdigit( *it ) ) it++;
-                    p.x = std::stoi( std::string( beg, it ) );
-
+                    p.x = f( it );
                     it++;
-
-                    beg = it;
-                    while ( std::isdigit( *it ) ) it++;
-                    p.y = std::stoi( std::string( beg, it ) );
+                    p.y = f( it );
 
                     if ( *it == ' ' )
                         it++;
 
                     return p;
                 };
-                xui::vec2 m;
+                xui::vec2 m, c;
 
                 while ( it != element.data.end() )
                 {
@@ -888,21 +1100,85 @@ void gdi_implement::render( std::span<xui::drawcmd> cmds )
                     }
                     break;
                     case 'C':
-                        //PolyBezier()
+                    {
+                        it++;
+
+                        auto c1 = ppoint( it );
+                        auto c2 = ppoint( it );
+                        auto e = ppoint( it );
+
+                        Gdiplus::PointF points[4];
+                        points[0] = { m.x, m.y };
+                        points[1] = { c1.x, c1.y };
+                        points[2] = { c2.x, c2.y };
+                        points[3] = { e.x, e.y };
+
+                        path.AddBeziers( points, 4 );
+
+                        m = e;
+                        c = c2;
+                    }
                         break;
                     case 'S':
-                        //PolyBezier()
+                    {
+                        it++;
+
+                        auto c1 = c;
+                        auto c2 = ppoint( it );
+                        auto e = ppoint( it );
+
+                        Gdiplus::PointF points[4];
+                        points[0] = { m.x, m.y };
+                        points[1] = { c1.x, c1.y };
+                        points[2] = { c2.x, c2.y };
+                        points[3] = { e.x, e.y };
+
+                        path.AddBeziers( points, 4 );
+
+                        m = e;
+                        c = {};
+                    }
                         break;
                     case 'Q':
+                    {
+                        it++;
+
+                        c = ppoint( it );
+                        auto e = ppoint( it );
+
+                        Gdiplus::PointF points[4];
+                        points[0] = { m.x, m.y };
+                        points[1] = { ( m.x + c.x ) / 2, ( m.y + c.y ) / 2 };
+                        points[2] = { ( e.x + c.x ) / 2, ( e.y + c.y ) / 2 };
+                        points[3] = { e.x, e.y };
+
+                        path.AddBeziers( points, 4 );
+
+                        m = e;
+                    }
                         break;
                     case 'T':
-                        break;
-                    case 'A':
-                        //AngleArc 
+                    {
+                        it++;
+
+                        auto e = ppoint( it );
+
+                        Gdiplus::PointF points[4];
+                        points[0] = { m.x, m.y };
+                        points[1] = { ( m.x + c.x ) / 2, ( m.y + c.y ) / 2 };
+                        points[2] = { ( e.x + c.x ) / 2, ( e.y + c.y ) / 2 };
+                        points[3] = { e.x, e.y };
+
+                        path.AddBeziers( points, 4 );
+
+                        m = e;
+                        c = {};
+                    }
                         break;
                     case 'Z':
                     {
                         it++;
+                        m = {};
                         path.CloseFigure();
                         path.StartFigure();
                     }
@@ -916,7 +1192,12 @@ void gdi_implement::render( std::span<xui::drawcmd> cmds )
                     }
                 }
 
-                g.DrawPath( &pen, &path );
+                if ( element.filled.colors.index() != 0 )
+                {
+                    g.FillPath( create_brush( element.filled ).get(), &path );
+                }
+
+                g.DrawPath( create_pen( element.stroke ).get(), &path );
             },
             [&]( const xui::drawcmd::image_element & element )
             {
@@ -930,28 +1211,24 @@ void gdi_implement::render( std::span<xui::drawcmd> cmds )
                 Gdiplus::Graphics g( _p->_hdc );
                 g.SetSmoothingMode( Gdiplus::SmoothingModeHighQuality );
 
-                if ( element.filled.color.a != 0 )
+                if ( element.filled.colors.index() != 0 )
                 {
-                    Gdiplus::SolidBrush brush( Gdiplus::Color( element.filled.color.a, element.filled.color.r, element.filled.color.g, element.filled.color.b ) );
-                    g.FillEllipse( &brush, element.center.x - element.radius, element.center.y - element.radius, element.radius * 2, element.radius * 2 );
+                    g.FillEllipse( create_brush( element.filled ).get(), element.center.x - element.radius, element.center.y - element.radius, element.radius * 2, element.radius * 2 );
                 }
 
-                Gdiplus::Pen pen( Gdiplus::Color( element.border.color.a, element.border.color.r, element.border.color.g, element.border.color.b ), element.border.width );
-                g.DrawEllipse( &pen, element.center.x - element.radius, element.center.y - element.radius, element.radius * 2, element.radius * 2 );
+                g.DrawEllipse( create_pen( element.border ).get(), element.center.x - element.radius, element.center.y - element.radius, element.radius * 2, element.radius * 2 );
             },
             [&]( const xui::drawcmd::ellipse_element & element )
             {
                 Gdiplus::Graphics g( _p->_hdc );
                 g.SetSmoothingMode( Gdiplus::SmoothingModeHighQuality );
 
-                if ( element.filled.color.a != 0 )
+                if ( element.filled.colors.index() != 0 )
                 {
-                    Gdiplus::SolidBrush brush( Gdiplus::Color( element.filled.color.a, element.filled.color.r, element.filled.color.g, element.filled.color.b ) );
-                    g.FillEllipse( &brush, element.center.x - element.radius.x, element.center.y - element.radius.y, element.radius.x * 2, element.radius.y * 2 );
+                    g.FillEllipse( create_brush( element.filled ).get(), element.center.x - element.radius.x, element.center.y - element.radius.y, element.radius.x * 2, element.radius.y * 2 );
                 }
 
-                Gdiplus::Pen pen( Gdiplus::Color( element.border.color.a, element.border.color.r, element.border.color.g, element.border.color.b ), element.border.width );
-                g.DrawEllipse( &pen, element.center.x - element.radius.x, element.center.y - element.radius.y, element.radius.x * 2, element.radius.y * 2 );
+                g.DrawEllipse( create_pen( element.border ).get(), element.center.x - element.radius.x, element.center.y - element.radius.y, element.radius.x * 2, element.radius.y * 2 );
             },
             [&]( const xui::drawcmd::polygon_element & element )
             {
@@ -964,18 +1241,83 @@ void gdi_implement::render( std::span<xui::drawcmd> cmds )
                     points.push_back( { it.x, it.y } );
                 }
 
-                if ( element.filled.color.a != 0 )
+                if ( element.filled.colors.index() != 0 )
                 {
-                    Gdiplus::SolidBrush brush( Gdiplus::Color( element.filled.color.a, element.filled.color.r, element.filled.color.g, element.filled.color.b ) );
-                    g.FillPolygon( &brush, points.data(), points.size() );
+                    g.FillPolygon( create_brush( element.filled ).get(), points.data(), points.size() );
                 }
 
-                Gdiplus::Pen pen( Gdiplus::Color( element.border.color.a, element.border.color.r, element.border.color.g, element.border.color.b ), element.border.width );
-                g.DrawPolygon( &pen, points.data(), points.size() );
+                g.DrawPolygon( create_pen( element.border ).get(), points.data(), points.size() );
             }
             ), cmd.element );
         }
     }
     
     if ( old_obj != nullptr ) SelectObject( _p->_hdc, old_obj );
+}
+
+std::shared_ptr<Gdiplus::Pen> gdi_implement::create_pen( const xui::stroke & stroke ) const
+{
+    Gdiplus::DashStyle style = Gdiplus::DashStyleSolid;
+
+    switch ( stroke.style )
+    {
+    case xui::stroke::SOLID: style = Gdiplus::DashStyleSolid; break;
+    case xui::stroke::DASHED: style = Gdiplus::DashStyleDash; break;
+    case xui::stroke::DOTTED: style = Gdiplus::DashStyleDot; break;
+    case xui::stroke::DASH_DOT: style = Gdiplus::DashStyleDashDot; break;
+    case xui::stroke::DASH_DOT_DOT: style = Gdiplus::DashStyleDashDotDot; break;
+    default:
+        break;
+    }
+    
+    auto pen = std::make_shared<Gdiplus::Pen>( Gdiplus::Color( stroke.color.a, stroke.color.r, stroke.color.g, stroke.color.b ), stroke.width );
+    pen->SetDashStyle( style );
+    return pen;
+}
+
+std::shared_ptr<Gdiplus::Brush> gdi_implement::create_brush( const xui::filled & filled ) const
+{
+    switch ( filled.style )
+    {
+    case xui::filled::SOLID:
+        return std::make_shared<Gdiplus::SolidBrush>( Gdiplus::Color{ std::get<xui::color>( filled.colors ).a, std::get<xui::color>( filled.colors ).r, std::get<xui::color>( filled.colors ).g, std::get<xui::color>( filled.colors ).b } );
+    case xui::filled::DENSE1:
+        return std::make_shared<Gdiplus::HatchBrush>( Gdiplus::HatchStyle10Percent, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).fore.a, std::get<xui::hatch_color>( filled.colors ).fore.r, std::get<xui::hatch_color>( filled.colors ).fore.g, std::get<xui::hatch_color>( filled.colors ).fore.b }, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).back.a, std::get<xui::hatch_color>( filled.colors ).back.r, std::get<xui::hatch_color>( filled.colors ).back.g, std::get<xui::hatch_color>( filled.colors ).back.b } );
+    case xui::filled::DENSE2:
+        return std::make_shared<Gdiplus::HatchBrush>( Gdiplus::HatchStyle20Percent, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).fore.a, std::get<xui::hatch_color>( filled.colors ).fore.r, std::get<xui::hatch_color>( filled.colors ).fore.g, std::get<xui::hatch_color>( filled.colors ).fore.b }, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).back.a, std::get<xui::hatch_color>( filled.colors ).back.r, std::get<xui::hatch_color>( filled.colors ).back.g, std::get<xui::hatch_color>( filled.colors ).back.b } );
+    case xui::filled::DENSE3:
+        return std::make_shared<Gdiplus::HatchBrush>( Gdiplus::HatchStyle30Percent, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).fore.a, std::get<xui::hatch_color>( filled.colors ).fore.r, std::get<xui::hatch_color>( filled.colors ).fore.g, std::get<xui::hatch_color>( filled.colors ).fore.b }, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).back.a, std::get<xui::hatch_color>( filled.colors ).back.r, std::get<xui::hatch_color>( filled.colors ).back.g, std::get<xui::hatch_color>( filled.colors ).back.b } );
+    case xui::filled::DENSE4:
+        return std::make_shared<Gdiplus::HatchBrush>( Gdiplus::HatchStyle40Percent, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).fore.a, std::get<xui::hatch_color>( filled.colors ).fore.r, std::get<xui::hatch_color>( filled.colors ).fore.g, std::get<xui::hatch_color>( filled.colors ).fore.b }, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).back.a, std::get<xui::hatch_color>( filled.colors ).back.r, std::get<xui::hatch_color>( filled.colors ).back.g, std::get<xui::hatch_color>( filled.colors ).back.b } );
+    case xui::filled::DENSE5:
+        return std::make_shared<Gdiplus::HatchBrush>( Gdiplus::HatchStyle50Percent, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).fore.a, std::get<xui::hatch_color>( filled.colors ).fore.r, std::get<xui::hatch_color>( filled.colors ).fore.g, std::get<xui::hatch_color>( filled.colors ).fore.b }, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).back.a, std::get<xui::hatch_color>( filled.colors ).back.r, std::get<xui::hatch_color>( filled.colors ).back.g, std::get<xui::hatch_color>( filled.colors ).back.b } );
+    case xui::filled::DENSE6:
+        return std::make_shared<Gdiplus::HatchBrush>( Gdiplus::HatchStyle60Percent, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).fore.a, std::get<xui::hatch_color>( filled.colors ).fore.r, std::get<xui::hatch_color>( filled.colors ).fore.g, std::get<xui::hatch_color>( filled.colors ).fore.b }, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).back.a, std::get<xui::hatch_color>( filled.colors ).back.r, std::get<xui::hatch_color>( filled.colors ).back.g, std::get<xui::hatch_color>( filled.colors ).back.b } );
+    case xui::filled::DENSE7:
+        return std::make_shared<Gdiplus::HatchBrush>( Gdiplus::HatchStyle70Percent, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).fore.a, std::get<xui::hatch_color>( filled.colors ).fore.r, std::get<xui::hatch_color>( filled.colors ).fore.g, std::get<xui::hatch_color>( filled.colors ).fore.b }, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).back.a, std::get<xui::hatch_color>( filled.colors ).back.r, std::get<xui::hatch_color>( filled.colors ).back.g, std::get<xui::hatch_color>( filled.colors ).back.b } );
+    case xui::filled::HORIZONTAL:
+        return std::make_shared<Gdiplus::HatchBrush>( Gdiplus::HatchStyleHorizontal, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).fore.a, std::get<xui::hatch_color>( filled.colors ).fore.r, std::get<xui::hatch_color>( filled.colors ).fore.g, std::get<xui::hatch_color>( filled.colors ).fore.b }, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).back.a, std::get<xui::hatch_color>( filled.colors ).back.r, std::get<xui::hatch_color>( filled.colors ).back.g, std::get<xui::hatch_color>( filled.colors ).back.b } );
+    case xui::filled::VERTICAL:
+        return std::make_shared<Gdiplus::HatchBrush>( Gdiplus::HatchStyleVertical, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).fore.a, std::get<xui::hatch_color>( filled.colors ).fore.r, std::get<xui::hatch_color>( filled.colors ).fore.g, std::get<xui::hatch_color>( filled.colors ).fore.b }, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).back.a, std::get<xui::hatch_color>( filled.colors ).back.r, std::get<xui::hatch_color>( filled.colors ).back.g, std::get<xui::hatch_color>( filled.colors ).back.b } );
+    case xui::filled::CROSS:
+        return std::make_shared<Gdiplus::HatchBrush>( Gdiplus::HatchStyleCross, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).fore.a, std::get<xui::hatch_color>( filled.colors ).fore.r, std::get<xui::hatch_color>( filled.colors ).fore.g, std::get<xui::hatch_color>( filled.colors ).fore.b }, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).back.a, std::get<xui::hatch_color>( filled.colors ).back.r, std::get<xui::hatch_color>( filled.colors ).back.g, std::get<xui::hatch_color>( filled.colors ).back.b } );
+    case xui::filled::FORWARD:
+        return std::make_shared<Gdiplus::HatchBrush>( Gdiplus::HatchStyleForwardDiagonal, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).fore.a, std::get<xui::hatch_color>( filled.colors ).fore.r, std::get<xui::hatch_color>( filled.colors ).fore.g, std::get<xui::hatch_color>( filled.colors ).fore.b }, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).back.a, std::get<xui::hatch_color>( filled.colors ).back.r, std::get<xui::hatch_color>( filled.colors ).back.g, std::get<xui::hatch_color>( filled.colors ).back.b } );
+    case xui::filled::BACKWARD:
+        return std::make_shared<Gdiplus::HatchBrush>( Gdiplus::HatchStyleBackwardDiagonal, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).fore.a, std::get<xui::hatch_color>( filled.colors ).fore.r, std::get<xui::hatch_color>( filled.colors ).fore.g, std::get<xui::hatch_color>( filled.colors ).fore.b }, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).back.a, std::get<xui::hatch_color>( filled.colors ).back.r, std::get<xui::hatch_color>( filled.colors ).back.g, std::get<xui::hatch_color>( filled.colors ).back.b } );
+    case xui::filled::DIAGCROSS:
+        return std::make_shared<Gdiplus::HatchBrush>( Gdiplus::HatchStyleDiagonalCross, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).fore.a, std::get<xui::hatch_color>( filled.colors ).fore.r, std::get<xui::hatch_color>( filled.colors ).fore.g, std::get<xui::hatch_color>( filled.colors ).fore.b }, Gdiplus::Color{ std::get<xui::hatch_color>( filled.colors ).back.a, std::get<xui::hatch_color>( filled.colors ).back.r, std::get<xui::hatch_color>( filled.colors ).back.g, std::get<xui::hatch_color>( filled.colors ).back.b } );
+    case xui::filled::LINEAR_GRADIENT:
+        return std::make_shared<Gdiplus::LinearGradientBrush>( Gdiplus::PointF{ std::get<xui::linear_gradient>( filled.colors ).p1.x,std::get<xui::linear_gradient>( filled.colors ).p1.y }, Gdiplus::PointF{ std::get<xui::linear_gradient>( filled.colors ).p2.x,std::get<xui::linear_gradient>( filled.colors ).p2.y }, Gdiplus::Color{ std::get<xui::linear_gradient>( filled.colors ).c1.a, std::get<xui::linear_gradient>( filled.colors ).c1.r, std::get<xui::linear_gradient>( filled.colors ).c1.g, std::get<xui::linear_gradient>( filled.colors ).c1.b }, Gdiplus::Color{ std::get<xui::linear_gradient>( filled.colors ).c2.a, std::get<xui::linear_gradient>( filled.colors ).c2.r, std::get<xui::linear_gradient>( filled.colors ).c2.g, std::get<xui::linear_gradient>( filled.colors ).c2.b } );
+    case xui::filled::TEXTURE:
+    {
+        auto it = std::find_if( _p->_textures.begin(), _p->_textures.end(), [&]( const auto & val ) { return val.name == std::get<xui::texture_brush>( filled.colors ).image; } );
+        if ( it != _p->_textures.end() )
+        {
+            return std::make_shared<Gdiplus::TextureBrush>( it->image, (Gdiplus::WrapMode)std::get<xui::texture_brush>( filled.colors ).mode );
+        }
+    }
+    }
+
+    return nullptr;
 }

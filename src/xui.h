@@ -17,20 +17,29 @@ namespace xui
 	class vec4;
 	class vec2;
 	class color;
+	class stroke;
+	class border;
+	class filled;
+	class hatch_color;
+	class texture_brush;
+	class linear_gradient;
+
 	class style;
 	class drawcmd;
 	class context;
 	class implement;
+
 	template<typename ... Ts>
 	struct overload : Ts ... { using Ts::operator() ...; };
 	template<class... Ts> overload( Ts... ) -> overload<Ts...>;
 
-	enum class err
+	enum err
 	{
 		ERR_NO = 0,
 	};
-	enum class event
+	enum event
 	{
+		// KeyBoard Events
 		KEY_EVENT_BEG = 0,
 		KEY_TAB = KEY_EVENT_BEG,
 		KEY_LEFT_ARROW,
@@ -54,7 +63,6 @@ namespace xui
 		KEY_A, KEY_B, KEY_C, KEY_D, KEY_E, KEY_F, KEY_G, KEY_H, KEY_I, KEY_J,
 		KEY_K, KEY_L, KEY_M, KEY_N, KEY_O, KEY_P, KEY_Q, KEY_R, KEY_S, KEY_T,
 		KEY_U, KEY_V, KEY_W, KEY_X, KEY_Y, KEY_Z,
-		KEY_UNICODE,
 		KEY_F1, KEY_F2, KEY_F3, KEY_F4, KEY_F5, KEY_F6,
 		KEY_F7, KEY_F8, KEY_F9, KEY_F10, KEY_F11, KEY_F12,
 		KEY_F13, KEY_F14, KEY_F15, KEY_F16, KEY_F17, KEY_F18,
@@ -86,7 +94,10 @@ namespace xui
 		KEY_KEYPAD_EQUAL,
 		KEY_APP_BACK,				// Available on some keyboard/mouses. Often referred as "Browser Back"
 		KEY_APP_FORWARD,
+		KEY_EVENT_END = KEY_APP_FORWARD,
 
+		// Gamepad Events
+		GAMEPAD_EVENT_BEG = KEY_EVENT_END,
 		GAMEPAD_START,				// Menu (Xbox)      + (Switch)   Start/Options (PS)
 		GAMEPAD_BACK,				// View (Xbox)      - (Switch)   Share (PS)
 		GAMEPAD_FACE_LEFT,			// X (Xbox)         Y (Switch)   Square (PS)        // Tap: Toggle Menu. Hold: Windowing mode (Focus/Move/Resize windows)
@@ -111,24 +122,29 @@ namespace xui
 		GAMEPAD_R_STICK_RIGHT,		// [Analog]
 		GAMEPAD_R_STICK_UP,			// [Analog]
 		GAMEPAD_R_STICK_DOWN,		// [Analog]
+		GAMEPAD_EVENT_END = GAMEPAD_R_STICK_DOWN,
 
+		// Mouse Events
+		MOUSE_EVENT_BEG = GAMEPAD_EVENT_END,
 		KEY_MOUSE_LEFT, KEY_MOUSE_RIGHT, KEY_MOUSE_MIDDLE, KEY_MOUSE_X1, KEY_MOUSE_X2,
-		KEY_EVENT_END = KEY_MOUSE_X2,
-
-		MOUSE_EVENT_BEG = KEY_EVENT_END,
 		MOUSE_ENTER, MOUSE_LEAVE, MOUSE_MOVE, MOUSE_WHEEL,
 		MOUSE_EVENT_END = MOUSE_WHEEL,
 
 		EVENT_MAX_COUNT,
 	};
-	enum class direction
+	enum action
+	{
+		PRESS = 1,
+		RELEASE = -1,
+	};
+	enum direction
 	{
 		LEFT_RIGHT,
 		RIGHT_LEFT,
 		TOP_BOTTOM,
 		BOTTOM_TOP,
 	};
-	enum class orientation
+	enum orientation
 	{
 		ORIENT_TOP,
 		ORIENT_LEFT,
@@ -138,54 +154,54 @@ namespace xui
 
 	enum font_flag
 	{
-		FONT_NONE						= 0,
-		FONT_BOLD						= 1 << 0,
-		FONT_ITALIC						= 1 << 1,
-		FONT_UNDERLINE					= 1 << 2,
-		FONT_STRIKEOUT					= 1 << 3,
+		FONT_NONE = 0,
+		FONT_BOLD = 1 << 0,
+		FONT_ITALIC = 1 << 1,
+		FONT_UNDERLINE = 1 << 2,
+		FONT_STRIKEOUT = 1 << 3,
 	};
 	enum window_flag
 	{
-		WINDOW_NONE							= 0,
-		WINDOW_NO_MOVE						= 1 << 0,
-		WINDOW_NO_RESIZE					= 1 << 1,
-		WINDOW_NO_TITLEBAR					= 1 << 2,
-		WINDOW_NO_COLLAPSE					= 1 << 3,
-		WINDOW_NO_BACKGROUND				= 1 << 4,
-		WINDOW_NO_MOUSE_INPUTS				= 1 << 5,
-		WINDOW_NO_FOCUS_ON_APPEARING		= 1 << 6,
-		WINDOW_NO_BRING_TO_FRONT_ON_FOCUS	= 1 << 7,
-		WINDOW_NO_CLOSEBOX					= 1 << 8,
-		WINDOW_NO_MINIMIZEBOX				= 1 << 9,
-		WINDOW_NO_MAXIMIZEBOX				= 1 << 10,
+		WINDOW_NONE = 0,
+		WINDOW_NO_MOVE = 1 << 0,
+		WINDOW_NO_RESIZE = 1 << 1,
+		WINDOW_NO_TITLEBAR = 1 << 2,
+		WINDOW_NO_COLLAPSE = 1 << 3,
+		WINDOW_NO_BACKGROUND = 1 << 4,
+		WINDOW_NO_MOUSE_INPUTS = 1 << 5,
+		WINDOW_NO_FOCUS_ON_APPEARING = 1 << 6,
+		WINDOW_NO_BRING_TO_FRONT_ON_FOCUS = 1 << 7,
+		WINDOW_NO_CLOSEBOX = 1 << 8,
+		WINDOW_NO_MINIMIZEBOX = 1 << 9,
+		WINDOW_NO_MAXIMIZEBOX = 1 << 10,
 	};
 	enum window_status
 	{
-		WINDOW_SHOW			= 1 << 0,
-		WINDOW_HIDE			= 1 << 1,
-		WINDOW_RESTORE		= 1 << 2,
-		WINDOW_MINIMIZE		= 1 << 3,
-		WINDOW_MAXIMIZE		= 1 << 4,
+		WINDOW_SHOW = 1 << 0,
+		WINDOW_HIDE = 1 << 1,
+		WINDOW_RESTORE = 1 << 2,
+		WINDOW_MINIMIZE = 1 << 3,
+		WINDOW_MAXIMIZE = 1 << 4,
 	};
 	enum modifier_flag
 	{
-		MOD_NONE		= 0,
-		MOD_SHIFT		= 1 << 0,
-		MOD_CONTROL		= 1 << 1,
-		MOD_ALT			= 1 << 2,
-		MOD_META		= 1 << 3,
-		MOD_KEYPAD		= 1 << 4,
-		MOD_GROUP		= 1 << 5,
+		MOD_NONE = 0,
+		MOD_SHIFT = 1 << 0,
+		MOD_CONTROL = 1 << 1,
+		MOD_ALT = 1 << 2,
+		MOD_META = 1 << 3,
+		MOD_KEYPAD = 1 << 4,
+		MOD_GROUP = 1 << 5,
 	};
 	enum alignment_flag
 	{
-		ALIGN_LEFT			= 1 << 0,
-		ALIGN_RIGHT			= 1 << 1,
-		ALIGN_TOP			= 1 << 2,
-		ALIGN_BOTTOM		= 1 << 3,
-		ALIGN_VCENTER		= 1 << 4,
-		ALIGN_HCENTER		= 1 << 5,
-		ALIGN_CENTER		= ALIGN_VCENTER | ALIGN_HCENTER,
+		ALIGN_LEFT = 1 << 0,
+		ALIGN_RIGHT = 1 << 1,
+		ALIGN_TOP = 1 << 2,
+		ALIGN_BOTTOM = 1 << 3,
+		ALIGN_VCENTER = 1 << 4,
+		ALIGN_HCENTER = 1 << 5,
+		ALIGN_CENTER = ALIGN_VCENTER | ALIGN_HCENTER,
 	};
 
 	using font_id = std::size_t;
@@ -326,13 +342,97 @@ namespace xui
 		xui::color lerp( const xui::color & target, float t ) const;
 	};
 
-	class style
+	class hatch_color
 	{
 	public:
-		struct variant : public std::variant<std::monostate, int, float, uint32_t, std::string, xui::color, xui::vec2, xui::vec4, xui::url>
+		xui::color fore;
+		xui::color back;
+	};
+
+	class texture_brush
+	{
+	public:
+		enum warp
+		{
+			WRAP_TILE,
+			WRAP_TILEFLIPX,
+			WRAP_TILEFLIPY,
+			WRAP_TILEFLIPXY,
+			WRAP_CLAMP
+		};
+
+		xui::url image;
+		warp mode = WRAP_TILE;
+	};
+
+	class linear_gradient
+	{
+	public:
+		xui::vec2 p1, p2;
+		xui::color c1, c2;
+	};
+
+	class stroke
+	{
+	public:
+		enum
+		{
+			SOLID,				// _____________
+			DASHED,				// _ _ _ _ _ _ _
+			DOTTED,				// . . . . . . .
+			DASH_DOT,			// _ . _ . _ . _
+			DASH_DOT_DOT,		// _ . . _ . . _
+		};
+
+		uint32_t style = 1;
+		float width = 1;
+		xui::color color;
+	};
+
+	class border : public stroke
+	{
+	public:
+		xui::vec4 radius;
+	};
+
+	class filled
+	{
+	public:
+		enum
+		{
+			SOLID, // xui::color 
+			DENSE1, // xui::style::hatch_color
+			DENSE2,
+			DENSE3,
+			DENSE4,
+			DENSE5,
+			DENSE6,
+			DENSE7,
+			HORIZONTAL,
+			VERTICAL,
+			CROSS,
+			FORWARD,
+			BACKWARD,
+			DIAGCROSS,
+			TEXTURE, // xui::style::texture_brush
+			LINEAR_GRADIENT, // xui::style::linear_gradient 
+		};
+
+		uint32_t style = SOLID;
+		std::variant<std::monostate, xui::color, xui::hatch_color, xui::texture_brush, xui::linear_gradient> colors;
+	};
+
+
+	class style
+	{
+	private:
+		using variant_type = std::variant<std::monostate, int, float, uint32_t, std::string, xui::color, xui::vec2, xui::vec4, xui::url, xui::hatch_color, xui::texture_brush, xui::linear_gradient, xui::stroke, xui::border, xui::filled>;
+
+	public:
+		struct variant : public variant_type
 		{
 		public:
-			using std::variant<std::monostate, int, float, uint32_t, std::string, xui::color, xui::vec2, xui::vec4, xui::url>::variant;
+			using variant_type::variant;
 
 		public:
 			static constexpr const std::size_t nil_idx = 0;
@@ -344,6 +444,12 @@ namespace xui
 			static constexpr const std::size_t vec2_idx = 6;
 			static constexpr const std::size_t vec4_idx = 7;
 			static constexpr const std::size_t url_idx = 8;
+			static constexpr const std::size_t hatch_color_idx = 9;
+			static constexpr const std::size_t texture_brush_idx = 10;
+			static constexpr const std::size_t linear_gradient_idx = 11;
+			static constexpr const std::size_t stroke_idx = 12;
+			static constexpr const std::size_t border_idx = 13;
+			static constexpr const std::size_t filled_idx = 14;
 
 		public:
 			template<typename T> T value( const T & def = {} ) const
@@ -379,19 +485,13 @@ namespace xui
 
 					return std::get<T>( *this );
 				}
-				else if constexpr ( std::is_same_v<T, std::string> )
+				else if constexpr ( std::is_same_v<T, xui::rect> )
 				{
-					if ( index() == url_idx )
-						return std::get<xui::url>( *this );
-
-					return std::get<T>( *this );
-				}
-				else if constexpr ( std::is_same_v<T, std::string_view> )
-				{
-					if ( index() == string_idx )
-						return std::get<std::string>( *this );
-					if ( index() == url_idx )
-						return std::get<xui::url>( *this );
+					if ( index() == vec4_idx )
+					{
+						auto v4 = std::get<xui::vec4>( *this );
+						return xui::rect( v4.x, v4.y, v4.z, v4.w );
+					}
 
 					return std::get<T>( *this );
 				}
@@ -405,7 +505,6 @@ namespace xui
 		};
 		struct selector
 		{
-			std::string name;
 			std::pmr::map<std::string, variant> attrs;
 		};
 
@@ -413,7 +512,7 @@ namespace xui
 		style( std::pmr::memory_resource * res = std::pmr::get_default_resource() );
 
 	public:
-		void load( std::string_view str );
+		bool parse( std::string_view str );
 		variant find( std::string_view name ) const;
 		template<typename T, typename Container> void get_values( Container & _c ) const
 		{
@@ -422,95 +521,46 @@ namespace xui
 				for ( const auto & addr : it.second.attrs )
 				{
 					std::visit( overload(
-					[&]( const T & val )
+						[&]( const T & val )
 					{
 						_c.push_back( val );
 					},
-					[]( const auto & )
+						[]( const auto & )
 					{}
 					), addr.second );
 				}
 			}
 		}
 
-	public:
-		static variant parse( std::string_view val );
-		static int parse_int( std::string_view val );
-		static float parse_flt( std::string_view val );
-		static xui::url parse_url( std::string_view val );
-		static xui::vec2 parse_vec2( std::string_view val );
-		static xui::vec4 parse_vec4( std::string_view val );
-		static xui::color parse_rgb( std::string_view val );
-		static xui::color parse_rgba( std::string_view val );
-		static xui::color parse_dark( std::string_view val );
-		static xui::color parse_light( std::string_view val );
-
-	public:
-		static bool register_flag( std::string_view name, std::uint32_t flags );
-		static bool register_color( std::string_view name, const xui::color & color );
-		static bool register_function( std::string_view name, const std::function<xui::style::variant( std::string_view )> & func );
+	private:
+		static selector parse_selector( std::string_view::iterator & beg, std::string_view::iterator end );
+		static variant parse_attribute( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::color parse_light( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::color parse_dark( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::color parse_rgba( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::color parse_rgb( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::vec2 parse_vec2( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::vec4 parse_vec4( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::color parse_hex( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::url parse_url( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::hatch_color parse_hatch( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::texture_brush parse_sample( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::linear_gradient parse_linear( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::stroke parse_stroke( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::border parse_border( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::filled parse_filled( std::string_view::iterator & beg, std::string_view::iterator end );
 
 	private:
 		static std::map<std::string_view, std::uint32_t> & flags();
 		static std::map<std::string_view, std::uint32_t> & colors();
-		static std::map<std::string_view, std::function<xui::style::variant( std::string_view )>> & functions();
+		static std::map<std::string_view, std::function<xui::style::variant( std::string_view::iterator &, std::string_view::iterator )>> & functions();
 
 	private:
-		template<typename It> static void skip( It & it, const It & end )
+		template<char c, typename It> static bool check( It & beg, const It & end )
 		{
-			if ( it != end )
-			{
-				while ( it != end && ( *it == '\n' || *it == '\r' || *it == '\t' || *it == ' ' ) )
-					++it;
-			}
-		}
-		template<char c, typename It> static It adv( It & it, const It & end )
-		{
-			skip( it, end );
+			while ( std::isspace( *beg ) ) ++beg;
 
-			if ( it != end )
-			{
-				while ( it != end && *it != c ) ++it;
-
-				auto result = it;
-
-				skip( it, end );
-
-				return result;
-			}
-
-			return it;
-		}
-		template<char c, typename It> static It adv2( const It & it, const It & end )
-		{
-			It it2 = it;
-
-			skip( it2, end );
-
-			if ( it2 != end )
-			{
-				while ( it2 != end && *it2 != c ) ++it2;
-			}
-
-			return it2;
-		}
-		template<char c, typename It> static bool check( It & it, const It & end )
-		{
-			if ( it != end )
-			{
-				skip( it, end );
-
-				if ( it != end && *it == c )
-				{
-					++it;
-
-					skip( it, end );
-
-					return true;
-				}
-			}
-
-			return false;
+			return ( beg != end && *beg == c );
 		}
 
 	private:
@@ -519,52 +569,6 @@ namespace xui
 
 	class drawcmd
 	{
-	public:
-		struct stroke
-		{
-			enum
-			{
-				NONE,				//
-				SOLID,				// _____________
-				DASHED,				// _ _ _ _ _ _ _
-				DOTTED,				// . . . . . . .
-				DASH_DOT,			// _ . _ . _ . _
-				DASH_DOT_DOT,		// _ . . _ . . _
-			};
-
-			uint32_t style = 1;
-			float width = 1;
-			xui::color color;
-			xui::vec4 radius;
-		};
-		struct filled
-		{
-			enum
-			{
-				NONE,
-				SOLID, // SolidBrush 
-				DENSE1, // HatchBrush
-				DENSE2,
-				DENSE3,
-				DENSE4,
-				DENSE5,
-				DENSE6,
-				DENSE7,
-				HORIZONTAL,
-				VERTICAL,
-				CROSS,
-				FORWARD,
-				BACKWARD,
-				DIAGCROSS,
-				LINEAR_GRADIENT, // LinearGradientBrush 
-				CONICAL_GRADIENT, // GraphicsPath
-				RADIAL_GRADIENT, // GraphicsPath
-				TEXTURE, // TextureBrush
-			};
-
-			xui::color color;
-		};
-
 	public:
 		struct text_element
 		{
@@ -577,13 +581,13 @@ namespace xui
 		struct line_element
 		{
 			xui::vec2 p1, p2;
-			xui::drawcmd::stroke stroke;
+			xui::stroke stroke;
 		};
 		struct rect_element
 		{
 			xui::rect rect;
-			xui::drawcmd::stroke border;
-			xui::drawcmd::filled filled;
+			xui::border border;
+			xui::filled filled;
 		};
 		struct path_element
 		{
@@ -599,7 +603,7 @@ namespace xui
 			}
 			inline path_element & curveto( const xui::vec2 & c1, const xui::vec2 & c2, const xui::vec2 & e )
 			{
-				data.append( std::format( "C{} {} {} {} ", c1.x, c1.y, c2.x, c2.y, e.x, e.y ) );
+				data.append( std::format( "C{} {} {} {} {} {} ", c1.x, c1.y, c2.x, c2.y, e.x, e.y ) );
 				return *this;
 			}
 			inline path_element & smooth_curveto( const xui::vec2 & c, const xui::vec2 & e )
@@ -607,19 +611,14 @@ namespace xui
 				data.append( std::format( "S{} {} {} {} ", c.x, c.y, e.x, e.y ) );
 				return *this;
 			}
-			inline path_element & quadratic_bezier_curve( const xui::vec2 & c, const xui::vec2 & e )
+			inline path_element & quadratic_belzier_curve( const xui::vec2 & c, const xui::vec2 & e )
 			{
 				data.append( std::format( "Q{} {} {} {} ", c.x, c.y, e.x, e.y ) );
 				return *this;
 			}
-			inline path_element & smooth_quadratic_bezier_curveto( const xui::vec2 & e )
+			inline path_element & smooth_quadratic_belzier_curveto( const xui::vec2 & e )
 			{
 				data.append( std::format( "T{} {} ", e.x, e.y ) );
-				return *this;
-			}
-			inline path_element & elliptical_arc( float x_raduis, float y_raduis, float x_angle, bool arc_len, bool arc_dir, const xui::vec2 & e )
-			{
-				data.append( std::format( "A{} {} {} {} {} {} {} ", x_raduis, y_raduis, x_angle, arc_len ? 1 : 0, arc_dir ? 1 : 0, e.x, e.y ) );
 				return *this;
 			}
 			inline path_element & closepath()
@@ -629,8 +628,8 @@ namespace xui
 			}
 
 			std::string data;
-			xui::drawcmd::stroke stroke;
-			xui::drawcmd::filled filled;
+			xui::stroke stroke;
+			xui::filled filled;
 		};
 		struct image_element
 		{
@@ -641,20 +640,20 @@ namespace xui
 		{
 			float radius = 1;
 			xui::vec2 center;
-			xui::drawcmd::stroke border;
-			xui::drawcmd::filled filled;
+			xui::border border;
+			xui::filled filled;
 		};
 		struct ellipse_element
 		{
 			xui::vec2 center;
 			xui::vec2 radius;
-			xui::drawcmd::stroke border;
-			xui::drawcmd::filled filled;
+			xui::border border;
+			xui::filled filled;
 		};
 		struct polygon_element
 		{
-			xui::drawcmd::stroke border;
-			xui::drawcmd::filled filled;
+			xui::border border;
+			xui::filled filled;
 			std::pmr::vector<xui::vec2> points;
 		};
 
@@ -693,104 +692,52 @@ namespace xui
 	public:
 		void push_style( xui::style * style );
 		void pop_style();
-		xui::style::variant current_style( std::string_view attr );
-		template<typename T> T current_style( std::string_view attr, const T & def )
+		xui::style::variant current_style( std::string_view attr ) const;
+		template<typename T> T current_style( std::string_view attr, const T & def ) const
 		{
 			return current_style( attr ).value<T>( def );
 		}
 
+		void push_style_type( std::string_view type );
+		void pop_style_type();
+		std::string_view current_style_type() const;
+
+		void push_style_element( std::string_view type );
+		void pop_style_element();
+		std::string_view current_style_element() const;
+
+		void push_style_action( std::string_view type );
+		void pop_style_action();
+		std::string_view current_style_action() const;
+
+	public:
 		void push_font( xui::font_id font );
 		void pop_font();
 		xui::font_id current_font() const;
-
-		void push_window( xui::window_id id );
-		void pop_window();
-		xui::window_id current_window() const;
-
-		void push_texture( xui::texture_id id );
-		void pop_texture();
-		xui::texture_id current_texture() const;
-
-		void push_string_id( xui::string_id id );
-		void pop_string_id();
-		xui::string_id current_string_id() const;
 
 		void push_rect( const xui::rect & rect );
 		void pop_rect();
 		xui::rect currrent_rect() const;
 
-		void push_window_flag( xui::window_flag flag );
-		void pop_window_flag();
-		xui::window_flag current_flag() const;
+		void push_string_id( xui::string_id id );
+		void pop_string_id();
+		xui::string_id current_string_id() const;
+
+		void push_window_id( xui::window_id id );
+		void pop_window_id();
+		xui::window_id current_window_id() const;
+
+		void push_texture_id( xui::texture_id id );
+		void pop_texture_id();
+		xui::texture_id current_texture_id() const;
 
 	public:
-		void begin();
-		std::span<xui::drawcmd> end();
-
-	public:
-		bool begin_window( std::string_view title, xui::texture_id icon, int flags = xui::window_flag::WINDOW_NONE );
-		void end_window();
-
-	public:
-		bool image( xui::texture_id id );
-		bool label( std::string_view text );
-		bool radio( bool & checked );
-		bool check( bool & checked );
-		bool button( std::string_view text );
-		float slider( float & value, float min, float max );
-		bool process( float value, float min, float max, std::string_view text = "" );
-		float scrollbar( float & value, float step, float min, float max, xui::direction dir = xui::direction::TOP_BOTTOM );
-
-	public:
-		bool begin_menubar();
-		void end_menubar();
-		bool begin_menu();
-		void end_menu();
-		bool menu_item();
-		bool menu_separator();
-
-	public:
-		bool begin_combobox();
-		void end_combobox();
-		bool combobox_item();
-
-	public:
-		bool begin_tabview();
-		void end_tabview();
-		bool begin_tab();
-		void end_tab();
-
-	public:
-		bool begin_listview();
-		void end_listview();
-		bool listview_item();
-
-	public:
-		bool begin_treeview();
-		void end_treeview();
-		bool treeview_item();
-
-	public:
-		bool begin_tableview();
-		void end_tableview();
-		void tableview_header();
-		void tableview_item();
-
-	public:
-		template<typename F> std::span<xui::drawcmd> draw( F && f )
+		template<typename F> void draw_style( xui::style * style, F && f )
 		{
-			begin();
+			push_style( style );
 			f();
-			return end();
+			pop_style();
 		}
-
-	protected:
-		void push_style_type( std::string_view type );
-		void pop_style_type();
-		void push_style_element( std::string_view type );
-		void pop_style_element();
-		void push_style_action( std::string_view type );
-		void pop_style_action();
 		template<typename F> void draw_style_type( std::string_view type, F && func )
 		{
 			if ( !type.empty() ) push_style_type( type );
@@ -809,16 +756,131 @@ namespace xui
 			func();
 			if ( !action.empty() ) pop_style_action();
 		}
+		template<typename F> void draw_font( xui::font_id id, F && func )
+		{
+			push_font( id );
+			func();
+			pop_font();
+		}
+		template<typename F> void draw_rect( const xui::rect & rect, F && f )
+		{
+			push_rect( rect );
+			f();
+			pop_rect();
+		}
+		template<typename F> void draw_string_id( xui::string_id str_id, F && f )
+		{
+			push_string_id( str_id );
+			f();
+			pop_string_id();
+		}
+		template<typename F> void draw_window_id( xui::window_id id, F && func )
+		{
+			push_window_id( id );
+			func();
+			pop_window_id();
+		}
+		template<typename F> void draw_texture_id( xui::texture_id id, F && func )
+		{
+			push_texture_id( id );
+			func();
+			pop_texture_id();
+		}
 
-	protected:
-		xui::drawcmd::text_element & draw_text( std::string_view text, xui::font_id id, const xui::rect & rect, const xui::color & font_color, xui::alignment_flag text_align);
-		xui::drawcmd::line_element & draw_line( const xui::vec2 & p1, const xui::vec2 & p2, uint32_t stroke_style, float stroke_width, const xui::color & stroke_color );
-		xui::drawcmd::rect_element & draw_rect( const xui::rect & rect, uint32_t border_style, float border_width, const xui::color & border_color, const xui::vec4 & border_radius, const xui::color & background_color );
-		xui::drawcmd::path_element & draw_path( uint32_t stroke_style, float stroke_width, const xui::color & stroke_color, const xui::color & background_color );
+	public:
+		void begin();
+		std::span<xui::drawcmd> end();
+
+	public:
+		bool begin_window( std::string_view title, xui::texture_id icon_id, int flags = xui::window_flag::WINDOW_NONE );
+		bool begin_window( xui::string_id str_id, std::string_view title, xui::texture_id icon_id, int flags = xui::window_flag::WINDOW_NONE );
+		void end_window();
+
+	public:
+		bool image( xui::texture_id id );
+		bool image( xui::string_id str_id, xui::texture_id id );
+		bool label( std::string_view text );
+		bool label( xui::string_id str_id, std::string_view text );
+		bool radio( bool & checked );
+		bool radio( xui::string_id str_id, bool & checked );
+		bool check( bool & checked );
+		bool check( xui::string_id str_id, bool & checked );
+		bool button( std::string_view text );
+		bool button( xui::string_id str_id, std::string_view text );
+		float slider( float & value, float min, float max );
+		float slider( xui::string_id str_id, float & value, float min, float max );
+		bool process( float value, float min, float max, std::string_view text = "" );
+		bool process( xui::string_id str_id, float value, float min, float max, std::string_view text = "" );
+		float scrollbar( float & value, float step, float min, float max, xui::direction dir = xui::direction::TOP_BOTTOM );
+		float scrollbar( xui::string_id str_id, float & value, float step, float min, float max, xui::direction dir = xui::direction::TOP_BOTTOM );
+
+	public:
+		bool begin_menubar();
+		bool begin_menu();
+		bool menu_item();
+		bool menu_separator();
+		void end_menu();
+		void end_menubar();
+
+	public:
+		bool begin_combobox();
+		void end_combobox();
+		bool combobox_item();
+
+	public:
+		bool begin_tabview();
+		bool begin_tab();
+		void end_tab();
+		void end_tabview();
+
+	public:
+		bool begin_listview();
+		void end_listview();
+		bool listview_item();
+
+	public:
+		bool begin_treeview();
+		void end_treeview();
+		bool treeview_item();
+
+	public:
+		bool begin_tableview();
+		void tableview_header();
+		void tableview_item();
+		void end_tableview();
+
+	public:
+		template<typename F> std::span<xui::drawcmd> draw( F && f )
+		{
+			begin();
+			f();
+			return end();
+		}
+		template<typename F> bool draw_window( xui::string_id str_id, std::string_view title, xui::texture_id icon_id, int flags, F && f )
+		{
+			begin_window( title, icon_id, flags );
+			f();
+			end_window();
+		}
+
+	public:
+		xui::drawcmd::text_element & draw_text( std::string_view text, xui::font_id id, const xui::rect & rect, const xui::color & font_color, xui::alignment_flag text_align );
+		xui::drawcmd::line_element & draw_line( const xui::vec2 & p1, const xui::vec2 & p2, const xui::stroke & stroke );
+		xui::drawcmd::rect_element & draw_rect( const xui::rect & rect, const xui::border & border, const xui::filled filled );
+		xui::drawcmd::path_element & draw_path( const xui::stroke & stroke, const xui::filled filled );
 		xui::drawcmd::image_element & draw_image( xui::texture_id id, const xui::rect & rect );
-		xui::drawcmd::circle_element & draw_circle( const xui::vec2 & center, float radius, uint32_t border_style, float border_width, const xui::color & border_color, const xui::vec4 & border_radius, const xui::color & background_color );
-		xui::drawcmd::ellipse_element & draw_ellipse( const xui::vec2 & center, const xui::vec2 & radius, uint32_t border_style, float border_width, const xui::color & border_color, const xui::vec4 & border_radius, const xui::color & background_color );
-		xui::drawcmd::polygon_element & draw_polygon( std::span<xui::vec2> points, uint32_t border_style, float border_width, const xui::color & border_color, const xui::vec4 & border_radius, const xui::color & background_color );
+		xui::drawcmd::circle_element & draw_circle( const xui::vec2 & center, float radius, const xui::border & border, const xui::filled filled );
+		xui::drawcmd::ellipse_element & draw_ellipse( const xui::vec2 & center, const xui::vec2 & radius, const xui::border & border, const xui::filled filled );
+		xui::drawcmd::polygon_element & draw_polygon( std::span<xui::vec2> points, const xui::border & border, const xui::filled filled );
+
+	private:
+		std::string style_name() const;
+		std::string focus_name() const;
+
+	private:
+		void push_focus( xui::event event );
+		void pop_focus();
+		bool current_focus() const;
 
 	private:
 		private_p * _p;
@@ -861,19 +923,13 @@ namespace xui
 
 	public:
 		virtual xui::vec2 get_cursor( xui::window_id id ) const = 0;
-		virtual int get_event( xui::window_id id, xui::event key ) const = 0;
+		virtual std::string get_unicodes( xui::window_id id ) const = 0;
+		virtual int get_event( xui::window_id id, xui::event key, xui::action act = xui::action::PRESS ) const = 0;
 		virtual std::span<xui::vec2> get_touchs( xui::window_id id ) const = 0;
+		virtual std::string get_clipboard_data( xui::window_id id, std::string_view mime ) const = 0;
+		virtual bool set_clipboard_data( xui::window_id id, std::string_view mime, std::string_view data ) = 0;
 	};
 
-	namespace system_resource
-	{
-		static constexpr xui::string_id FONT_DEFAULT		= "font://default";
-
-		static constexpr xui::string_id ICON_APPLICATION	= "icon://application";
-		static constexpr xui::string_id ICON_ERROR			= "icon://error";
-		static constexpr xui::string_id ICON_WARNING		= "icon://warning";
-		static constexpr xui::string_id ICON_INFORMATION	= "icon://information";
-	}
 
 	inline xui::vec2	operator-( const xui::vec2 & lhs )
 	{
@@ -911,35 +967,35 @@ namespace xui
 	{
 		return xui::vec2( lhs.x / rhs.x, lhs.y / rhs.y );
 	}
-	inline xui::vec2 & operator+=( xui::vec2 & lhs, const float rhs )
+	inline xui::vec2 &  operator+=( xui::vec2 & lhs, const float rhs )
 	{
 		lhs.x += rhs; lhs.y += rhs; return lhs;
 	}
-	inline xui::vec2 & operator-=( xui::vec2 & lhs, const float rhs )
+	inline xui::vec2 &  operator-=( xui::vec2 & lhs, const float rhs )
 	{
 		lhs.x -= rhs; lhs.y -= rhs; return lhs;
 	}
-	inline xui::vec2 &	operator*=( xui::vec2 & lhs, const float rhs )
+	inline xui::vec2 &  operator*=( xui::vec2 & lhs, const float rhs )
 	{
 		lhs.x *= rhs; lhs.y *= rhs; return lhs;
 	}
-	inline xui::vec2 &	operator/=( xui::vec2 & lhs, const float rhs )
+	inline xui::vec2 &  operator/=( xui::vec2 & lhs, const float rhs )
 	{
 		lhs.x /= rhs; lhs.y /= rhs; return lhs;
 	}
-	inline xui::vec2 &	operator+=( xui::vec2 & lhs, const xui::vec2 & rhs )
+	inline xui::vec2 &  operator+=( xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		lhs.x += rhs.x; lhs.y += rhs.y; return lhs;
 	}
-	inline xui::vec2 &	operator-=( xui::vec2 & lhs, const xui::vec2 & rhs )
+	inline xui::vec2 &  operator-=( xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		lhs.x -= rhs.x; lhs.y -= rhs.y; return lhs;
 	}
-	inline xui::vec2 &	operator*=( xui::vec2 & lhs, const xui::vec2 & rhs )
+	inline xui::vec2 &  operator*=( xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		lhs.x *= rhs.x; lhs.y *= rhs.y; return lhs;
 	}
-	inline xui::vec2 &	operator/=( xui::vec2 & lhs, const xui::vec2 & rhs )
+	inline xui::vec2 &  operator/=( xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		lhs.x /= rhs.x; lhs.y /= rhs.y; return lhs;
 	}

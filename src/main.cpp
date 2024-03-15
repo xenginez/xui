@@ -11,7 +11,7 @@ int main()
 	xui::context ctx;
 	gdi_implement imp;
 	xui::style style;
-	style.load( xui::context::dark_style() );
+	style.parse( xui::context::dark_style() );
 
 	std::vector<xui::url> urls;
 	style.get_values<xui::url>( urls );
@@ -19,8 +19,8 @@ int main()
 	imp.init();
 	ctx.init( &imp );
 
-	auto font = imp.create_font( xui::system_resource::FONT_DEFAULT, 16, xui::font_flag::FONT_NONE );
-	auto icon = imp.create_texture( xui::system_resource::ICON_APPLICATION );
+	auto font = imp.create_font( system_resource::FONT_DEFAULT, 16, xui::font_flag::FONT_NONE );
+	auto icon = imp.create_texture( system_resource::ICON_APPLICATION );
 	auto window = imp.create_window( "XUI", icon, { 500, 540, 600, 600 } );
 
 	ctx.push_font( font );
@@ -30,7 +30,7 @@ int main()
 	{
 		ctx.begin();
 		{
-			ctx.push_window( window );
+			ctx.push_window_id( window );
 			{
 				ctx.push_rect( imp.get_window_rect( window ) );
 				{
@@ -82,7 +82,7 @@ int main()
 				}
 				ctx.pop_rect();
 			}
-			ctx.pop_window();
+			ctx.pop_window_id();
 		}
 		return ctx.end();
 	} );

@@ -14,7 +14,6 @@ namespace
 {
     static std::regex int_regex{ R"([-+]?([0-9]*[0-9]+))" };
     static std::regex flt_regex{ R"([-+]?([0-9]*.[0-9]+|[0-9]+))" };
-    static std::regex func_regex{ R"(\S*\([\s\S]*\))" };
 
     class xui_category : public std::error_category
     {
@@ -36,6 +35,28 @@ namespace
 
             return std::error_code( (int)code, category );
         }
+    };
+
+    struct style_type
+    {
+        style_type( auto beg, auto end, std::pmr::memory_resource * res )
+            : actions( res ), elements( res ), type( beg, end, res )
+        {
+        }
+        style_type( std::pmr::memory_resource * res )
+            : actions( res ), elements( res ), type( res )
+        {
+        }
+
+        std::pmr::string type;
+        std::pmr::deque<std::string> elements;
+        std::pmr::deque<std::string> actions;
+    };
+    struct focus_type
+    {
+        std::string name;
+        xui::window_id id = xui::invalid_id;
+        xui::event event = xui::event::EVENT_MAX_COUNT;
     };
 }
 
@@ -367,46 +388,46 @@ xui::style::style( std::pmr::memory_resource * res )
 
 }
 
-void xui::style::load( std::string_view str )
+bool xui::style::parse( std::string_view str )
 {
-    auto it = str.begin();
+    _selectors.clear();
 
-    skip( it, str.end() );
+    bool result = true;
+    std::string name;
+    auto beg = str.begin();
+    auto end = str.end();
 
-    while ( it != str.end() )
+    try
     {
-        auto beg = it;
-        auto end = adv<'{'>( it, str.end() );
-
-        selector select;
-        select.name = { beg, end };
-
-        if ( check<'{'>( it, str.end() ) )
+        while ( beg != end )
         {
-            while ( !check<'}'>( it, str.end() ) )
+            if ( std::isspace( *beg ) )
             {
-                beg = it;
-                end = adv<':'>( it, str.end() );
-
-                std::string name( beg, end );
-
-                check<':'>( it, str.end() );
-
-                beg = it;
-                end = adv<';'>( it, str.end() );
-
-                select.attrs.insert( { name, parse( { beg, end } ) } );
-
-                check<';'>( it, str.end() );
+                ++beg;
+            }
+            else if ( *beg == '{' )
+            {
+                _selectors.insert( { name, parse_selector( beg, end ) } );
+                name.clear();
+            }
+            else if ( *beg == ',' )
+            {
+                ++beg;
+            }
+            else
+            {
+                name.push_back( *beg++ );
             }
         }
-
-        check<','>( it, str.end() );
-
-        _selectors.insert( { select.name, select } );
+    }
+    catch ( const std::exception & e )
+    {
+        std::cout << e.what() << std::endl;
+        _selectors.clear();
+        result = false;
     }
 
-    int i = 0;
+    return result;
 }
 
 xui::style::variant xui::style::find( std::string_view name ) const
@@ -512,287 +533,386 @@ xui::style::variant xui::style::find( std::string_view name ) const
     return {};
 }
 
-xui::style::variant xui::style::parse( std::string_view text )
+xui::style::selector xui::style::parse_selector( std::string_view::iterator & beg, std::string_view::iterator end )
 {
-    std::string val( text );
-    while ( val.find( ' ' ) != std::string::npos )
-        val.replace( val.find( ' ' ), 1, "" );
+    _ASSERT( *beg++ == '{' && "" );
 
-    if ( val.find( "#" ) == 0 )
+    std::string name;
+    xui::style::selector select;
+
+    while ( beg != end )
     {
-        xui::color col;
-
-        auto beg = val.begin() + 1;
-        auto end = beg + std::min<std::size_t>( 2, std::distance( beg, val.end() ) );
-
-        if ( end != val.end() )
+        if ( std::isspace( *beg ) )
         {
-            col.r = std::stoi( std::string( beg, end ), nullptr, 16 );
+            ++beg;
         }
-
-        if ( end != val.end() )
+        else if ( *beg == ':' )
         {
-            beg = end;
-            end = beg + std::min<std::size_t>( 2, std::distance( beg, val.end() ) );
-            col.g = std::stoi( std::string( beg, end ), nullptr, 16 );
+            ++beg;
+            select.attrs.insert( { name, parse_attribute( beg, end ) } );
+            name.clear();
         }
-
-        if ( end != val.end() )
+        else if( *beg == ';' )
         {
-            beg = end;
-            end = beg + std::min<std::size_t>( 2, std::distance( beg, val.end() ) );
-            col.b = std::stoi( std::string( beg, end ), nullptr, 16 );
+            ++beg;
+            name.clear();
         }
-
-        if ( end != val.end() )
+        else if ( *beg == '}' )
         {
-            beg = end;
-            end = beg + std::min<std::size_t>( 2, std::distance( beg, val.end() ) );
-            col.a = std::stoi( std::string( beg, end ), nullptr, 16 );
+            ++beg;
+            return select;
         }
-
-        return col;
-    }
-    else if ( std::regex_match( val.begin(), val.end(), int_regex) )
-    {
-        int value = 0;
-        std::from_chars( val.data(), val.data() + val.size(), value );
-        return value;
-    }
-    else if ( std::regex_match( val.begin(), val.end(), flt_regex ) )
-    {
-        float value = 0;
-        std::from_chars( val.data(), val.data() + val.size(), value );
-        return value;
-    }
-    else if ( std::regex_match( val.begin(), val.end(), func_regex ) )
-    {
-        auto it = functions().find( { val.begin(), val.begin() + val.find( '(' ) } );
-        if ( it != functions().end() )
+        else
         {
-            return it->second( { adv2<'('>( val.begin(), val.end() ) + 1, adv2<')'>( val.begin(), val.end() ) } );
+            name.push_back( *beg++ );
         }
     }
-    else if ( flags().find( val ) != flags().end() )
-    {
-        return flags()[val];
-    }
-    else if ( colors().find( val ) != colors().end() )
-    {
-        return xui::color( colors()[val] );
-    }
 
-    return val;
+    return select;
 }
 
-int xui::style::parse_int( std::string_view val )
+xui::style::variant xui::style::parse_attribute( std::string_view::iterator & beg, std::string_view::iterator end )
 {
-    int result = 0;
-    std::from_chars( val.data(), val.data() + val.size(), result );
+    std::string value;
+
+    while ( beg != end )
+    {
+        if ( value.empty() && std::isspace( *beg ) )
+        {
+            ++beg;
+        }
+        else if ( *beg == '#' )
+        {
+            return parse_hex( beg, end );
+        }
+        else if ( *beg == '(' )
+        {
+            if ( functions().find( value ) != functions().end() )
+            {
+                return functions()[value]( beg, end );
+            }
+            else
+            {
+                break;
+            }
+        }
+        else if ( *beg == ',' || *beg == ';' || *beg == ')' )
+        {
+            ++beg;
+
+            while ( std::isspace( value.back() ) ) value.pop_back();
+
+            if ( std::regex_match( value, int_regex ) )
+            {
+                return std::stoi( value );
+            }
+            else if ( std::regex_match( value, flt_regex ) )
+            {
+                return std::stof( value );
+            }
+            else if ( flags().find( value ) != flags().end() )
+            {
+                return flags()[value];
+            }
+            else if ( colors().find( value ) != colors().end() )
+            {
+                return xui::color( colors()[value] );
+            }
+            else
+            {
+                break;
+            }
+        }
+        else
+        {
+            value.push_back( *beg++ );
+        }
+    }
+
+    return value;
+}
+
+xui::color xui::style::parse_light( std::string_view::iterator & beg, std::string_view::iterator end )
+{
+    _ASSERT( *beg++ == '(' && "" );
+
+    return parse_attribute( beg, end ).value<xui::color>().light();
+}
+
+xui::color xui::style::parse_dark( std::string_view::iterator & beg, std::string_view::iterator end )
+{
+    _ASSERT( *beg++ == '(' && "" );
+
+    return parse_attribute( beg, end ).value<xui::color>().dark();
+}
+
+xui::color xui::style::parse_rgba( std::string_view::iterator & beg, std::string_view::iterator end )
+{
+    _ASSERT( *beg++ == '(' && "" );
+
+    xui::color result;
+
+    result.r = parse_attribute( beg, end ).value<int>(); if (check<','>( beg, end ) ) ++beg;
+    result.g = parse_attribute( beg, end ).value<int>(); if (check<','>( beg, end ) ) ++beg;
+    result.b = parse_attribute( beg, end ).value<int>(); if (check<','>( beg, end ) ) ++beg;
+    result.a = parse_attribute( beg, end ).value<int>(); if (check<')'>( beg, end ) ) ++beg;
+
     return result;
 }
 
-float xui::style::parse_flt( std::string_view val )
+xui::color xui::style::parse_rgb( std::string_view::iterator & beg, std::string_view::iterator end )
 {
-    float result = 0;
-    std::from_chars( val.data(), val.data() + val.size(), result );
+    _ASSERT( *beg++ == '(' && "" );
+
+    xui::color result;
+
+    result.r = parse_attribute( beg, end ).value<int>(); if ( check<','>( beg, end ) ) ++beg;
+    result.g = parse_attribute( beg, end ).value<int>(); if ( check<','>( beg, end ) ) ++beg;
+    result.b = parse_attribute( beg, end ).value<int>(); if ( check<')'>( beg, end ) ) ++beg;
+
     return result;
 }
 
-xui::url xui::style::parse_url( std::string_view val )
+xui::vec2 xui::style::parse_vec2( std::string_view::iterator & beg, std::string_view::iterator end )
 {
-    return xui::url( val );
-}
+    _ASSERT( *beg++ == '(' && "" );
 
-xui::vec2 xui::style::parse_vec2( std::string_view val )
-{
     xui::vec2 result;
 
-    auto beg = val.begin();
-    auto r_beg = beg;
-    auto r_end = adv<','>( beg, val.end() );
-    result.x = parse_flt( { r_beg, r_end } );
-
-    check<','>( r_end, val.end() );
-
-    auto g_beg = r_end; beg = g_beg;
-    auto g_end = val.end();
-    result.y = parse_flt( { g_beg, g_end } );
+    result.x = parse_attribute( beg, end ).value<float>(); if ( check<','>( beg, end ) ) ++beg;
+    result.y = parse_attribute( beg, end ).value<float>(); if ( check<')'>( beg, end ) ) ++beg;
 
     return result;
 }
 
-xui::vec4 xui::style::parse_vec4( std::string_view val )
+xui::vec4 xui::style::parse_vec4( std::string_view::iterator & beg, std::string_view::iterator end )
 {
+    _ASSERT( *beg++ == '(' && "" );
+
     xui::vec4 result;
 
-    auto beg = val.begin();
-    auto r_beg = beg;
-    auto r_end = adv<','>( beg, val.end() );
-    result.x = parse_flt( { r_beg, r_end } );
-
-    check<','>( r_end, val.end() );
-
-    auto g_beg = r_end; beg = g_beg;
-    auto g_end = adv<','>( beg, val.end() );
-    result.y = parse_flt( { g_beg, g_end } );
-
-    check<','>( g_end, val.end() );
-
-    auto b_beg = g_end; beg = b_beg;
-    auto b_end = adv<','>( beg, val.end() );
-    result.z = parse_flt( { b_beg, b_end } );
-
-    check<','>( b_end, val.end() );
-
-    auto a_beg = b_end; beg = a_beg;
-    auto a_end = val.end();
-    result.w = parse_flt( { a_beg, a_end } );
+    result.x = parse_attribute( beg, end ).value<float>(); if ( check<','>( beg, end ) ) ++beg;
+    result.y = parse_attribute( beg, end ).value<float>(); if ( check<','>( beg, end ) ) ++beg;
+    result.z = parse_attribute( beg, end ).value<float>(); if ( check<','>( beg, end ) ) ++beg;
+    result.w = parse_attribute( beg, end ).value<float>(); if ( check<')'>( beg, end ) ) ++beg;
 
     return result;
 }
 
-xui::color xui::style::parse_rgb( std::string_view val )
+xui::color xui::style::parse_hex( std::string_view::iterator & beg, std::string_view::iterator end )
 {
-    xui::color result;
+    _ASSERT( *beg++ == '#' && "" );
 
-    auto beg = val.begin();
-    auto r_beg = beg;
-    auto r_end = adv<','>( beg, val.end() );
-    result.r = parse_int( { r_beg, r_end } );
+    xui::color color;
 
-    check<','>( r_end, val.end() );
+    auto it = beg;
+    while ( *it != ';' ) ++it;
 
-    auto g_beg = r_end; beg = g_beg;
-    auto g_end = adv<','>( beg, val.end() );
-    result.g = parse_int( { g_beg, g_end } );
+    std::from_chars( beg.operator->(), it.operator->(), color.hex, 16 );
+    beg = it;
 
-    check<','>( g_end, val.end() );
+    return color;
+}
 
-    auto b_beg = g_end; beg = b_beg;
-    auto b_end = val.end();
-    result.b = parse_int( { b_beg, b_end } );
+xui::url xui::style::parse_url( std::string_view::iterator & beg, std::string_view::iterator end )
+{
+    _ASSERT( *beg++ == '(' && "" );
+
+    std::string result;
+
+    while ( beg != end && *beg != ')' )
+    {
+        if ( !std::isspace( *beg ) )
+            result.push_back( *beg++ );
+        else
+            ++beg;
+    }
+
+    check<')'>( beg, end );
 
     return result;
 }
 
-xui::color xui::style::parse_rgba( std::string_view val )
+xui::hatch_color xui::style::parse_hatch( std::string_view::iterator & beg, std::string_view::iterator end )
 {
-    xui::color result;
+    _ASSERT( *beg++ == '(' && "" );
 
-    auto beg = val.begin();
-    auto r_beg = beg;
-    auto r_end = adv<','>( beg, val.end() );
-    result.r = parse_int( { r_beg, r_end } );
+    xui::hatch_color result;
 
-    check<','>( r_end, val.end() );
-
-    auto g_beg = r_end; beg = g_beg;
-    auto g_end = adv<','>( beg, val.end() );
-    result.g = parse_int( { g_beg, g_end } );
-
-    check<','>( g_end, val.end() );
-
-    auto b_beg = g_end; beg = b_beg;
-    auto b_end = adv<','>( beg, val.end() );
-    result.b = parse_int( { b_beg, b_end } );
-
-    check<','>( b_end, val.end() );
-
-    auto a_beg = b_end; beg = a_beg;
-    auto a_end = val.end();
-    result.a = parse_int( { a_beg, a_end } );
+    result.fore = parse_attribute( beg, end ).value<xui::color>(); if ( check<','>( beg, end ) ) ++beg;
+    result.back = parse_attribute( beg, end ).value<xui::color>(); if ( check<')'>( beg, end ) ) ++beg;
 
     return result;
 }
 
-xui::color xui::style::parse_dark( std::string_view val )
+xui::texture_brush xui::style::parse_sample( std::string_view::iterator & beg, std::string_view::iterator end )
 {
-    return parse( val ).value<xui::color>().dark();
+    _ASSERT( *beg++ == '(' && "" );
+
+    xui::texture_brush result;
+
+    result.image = parse_attribute( beg, end ).value<xui::url>(); if ( check<','>( beg, end ) ) ++beg;
+    result.mode = parse_attribute( beg, end ).value<xui::texture_brush::warp>(); if ( check<')'>( beg, end ) ) ++beg;
+
+    return result;
 }
 
-xui::color xui::style::parse_light( std::string_view val )
+xui::linear_gradient xui::style::parse_linear( std::string_view::iterator & beg, std::string_view::iterator end )
 {
-    return parse( val ).value<xui::color>().light();
+    _ASSERT( *beg++ == '(' && "" );
+
+    xui::linear_gradient result;
+
+    result.p1 = parse_attribute( beg, end ).value<xui::vec2>(); if ( check<','>( beg, end ) ) ++beg;
+    result.p2 = parse_attribute( beg, end ).value<xui::vec2>(); if ( check<','>( beg, end ) ) ++beg;
+    result.c1 = parse_attribute( beg, end ).value<xui::color>(); if ( check<','>( beg, end ) ) ++beg;
+    result.c2 = parse_attribute( beg, end ).value<xui::color>(); if ( check<')'>( beg, end ) ) ++beg;
+
+    return result;
 }
 
-bool xui::style::register_flag( std::string_view name, std::uint32_t flag )
+xui::stroke xui::style::parse_stroke( std::string_view::iterator & beg, std::string_view::iterator end )
 {
-    auto it = flags().find( name );
-    if ( it == flags().end() )
+    _ASSERT( *beg++ == '(' && "" );
+
+    xui::stroke result;
+
+    result.style = parse_attribute( beg, end ).value<uint32_t>(); if ( check<','>( beg, end ) ) ++beg;
+    result.width = parse_attribute( beg, end ).value<float>(); if ( check<','>( beg, end ) ) ++beg;
+    result.color = parse_attribute( beg, end ).value<xui::color>(); if ( check<')'>( beg, end ) ) ++beg;
+
+    return result;
+}
+
+xui::border xui::style::parse_border( std::string_view::iterator & beg, std::string_view::iterator end )
+{
+    _ASSERT( *beg++ == '(' && "" );
+
+    xui::border result;
+
+    result.style = parse_attribute( beg, end ).value<uint32_t>(); if ( check<','>( beg, end ) ) ++beg;
+    result.width = parse_attribute( beg, end ).value<float>(); if ( check<','>( beg, end ) ) ++beg;
+    result.color = parse_attribute( beg, end ).value<xui::color>(); if ( check<','>( beg, end ) ) ++beg;
+    result.radius = parse_attribute( beg, end ).value<xui::vec4>(); if ( check<')'>( beg, end ) ) ++beg;
+
+    return result;
+}
+
+xui::filled xui::style::parse_filled( std::string_view::iterator & beg, std::string_view::iterator end )
+{
+    _ASSERT( *beg++ == '(' && "" );
+
+    xui::filled result;
+
+    result.style = parse_attribute( beg, end ).value<uint32_t>(); if ( check<','>( beg, end ) ) ++beg;
+    switch ( result.style )
     {
-        flags().insert( { name, flag } );
-        return true;
+    case xui::filled::SOLID:
+        result.colors = parse_attribute( beg, end ).value<xui::color>(); if ( check<')'>( beg, end ) ) ++beg;
+        break;
+    case xui::filled::DENSE1:
+    case xui::filled::DENSE2:
+    case xui::filled::DENSE3:
+    case xui::filled::DENSE4:
+    case xui::filled::DENSE5:
+    case xui::filled::DENSE6:
+    case xui::filled::DENSE7:
+    case xui::filled::HORIZONTAL:
+    case xui::filled::VERTICAL:
+    case xui::filled::CROSS:
+    case xui::filled::FORWARD:
+    case xui::filled::BACKWARD:
+    case xui::filled::DIAGCROSS:
+        result.colors = parse_attribute( beg, end ).value<xui::hatch_color>(); if ( check<')'>( beg, end ) ) ++beg;
+        break;
+    case xui::filled::TEXTURE:
+        result.colors = parse_attribute( beg, end ).value<xui::texture_brush>(); if ( check<')'>( beg, end ) ) ++beg;
+        break;
+    case xui::filled::LINEAR_GRADIENT:
+        result.colors = parse_attribute( beg, end ).value<xui::linear_gradient>(); if ( check<')'>( beg, end ) ) ++beg;
+        break;
     }
-    return false;
-}
 
-bool xui::style::register_color( std::string_view name, const xui::color & color )
-{
-    auto it = colors().find( name );
-    if ( it == colors().end() )
-    {
-        colors().insert( { name, color.hex } );
-        return true;
-    }
-    return false;
-}
-
-bool xui::style::register_function( std::string_view name, const std::function<xui::style::variant( std::string_view )> & func )
-{
-    auto it = functions().find( name );
-    if ( it == functions().end() )
-    {
-        functions().insert( { name, func } );
-        return true;
-    }
-    return false;
+    return result;
 }
 
 std::map<std::string_view, std::uint32_t> & xui::style::flags()
 {
     static std::map<std::string_view, std::uint32_t> style_flags =
     {
+        // texture_brush mode
+        { "tile", xui::texture_brush::warp::WRAP_TILE },
+        { "flipx", xui::texture_brush::warp::WRAP_TILEFLIPX },
+        { "flipy", xui::texture_brush::warp::WRAP_TILEFLIPY },
+        { "flipxy", xui::texture_brush::warp::WRAP_TILEFLIPXY },
+        { "clamp", xui::texture_brush::warp::WRAP_CLAMP },
+
+        // stroke filled share
+        { "solid", 0 }, // { "solid", xui::stroke::SOLID }, { "solid", xui::drawcmd::filled::SOLID },
+
         // stroke style
-        { "none", xui::drawcmd::stroke::NONE },
-        { "solid", xui::drawcmd::stroke::SOLID },
-        { "dashed", xui::drawcmd::stroke::DASHED },
-        { "dotted", xui::drawcmd::stroke::DOTTED },
-        { "dashdot", xui::drawcmd::stroke::DASH_DOT },
-        { "dashdotdot", xui::drawcmd::stroke::DASH_DOT_DOT },
+        { "dashed", xui::stroke::DASHED },
+        { "dotted", xui::stroke::DOTTED },
+        { "dashdot", xui::stroke::DASH_DOT },
+        { "dashdotdot", xui::stroke::DASH_DOT_DOT },
+
+        // filled style
+        { "dense1", xui::filled::DENSE1 },
+        { "dense2", xui::filled::DENSE2 },
+        { "dense3", xui::filled::DENSE3 },
+        { "dense4", xui::filled::DENSE4 },
+        { "dense5", xui::filled::DENSE5 },
+        { "dense6", xui::filled::DENSE6 },
+        { "dense7", xui::filled::DENSE7 },
+        { "horizontal", xui::filled::HORIZONTAL },
+        { "vertical", xui::filled::VERTICAL },
+        { "cross", xui::filled::CROSS },
+        { "forward", xui::filled::FORWARD },
+        { "backward", xui::filled::BACKWARD },
+        { "diagcross", xui::filled::DIAGCROSS },
+        { "linear", xui::filled::LINEAR_GRADIENT },
+        { "texture", xui::filled::TEXTURE },
 
         // alignment
-        { "left"	, xui::alignment_flag::ALIGN_LEFT },
-        { "right"	, xui::alignment_flag::ALIGN_RIGHT },
-        { "top"		, xui::alignment_flag::ALIGN_TOP },
-        { "bottom"	, xui::alignment_flag::ALIGN_BOTTOM },
-        { "center"	, xui::alignment_flag::ALIGN_CENTER },
-        { "vcenter"	, xui::alignment_flag::ALIGN_VCENTER },
-        { "hcenter"	, xui::alignment_flag::ALIGN_HCENTER },
-        { "lefttop"	, xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_TOP },
-        { "topleft"	, xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_TOP },
-        { "leftbottom"	, xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_BOTTOM },
-        { "bottomleft"	, xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_BOTTOM },
-        { "righttop"	, xui::alignment_flag::ALIGN_RIGHT | xui::alignment_flag::ALIGN_TOP },
-        { "topright"	, xui::alignment_flag::ALIGN_RIGHT | xui::alignment_flag::ALIGN_TOP },
-        { "rightbottom", xui::alignment_flag::ALIGN_RIGHT | xui::alignment_flag::ALIGN_BOTTOM },
-        { "bottomright", xui::alignment_flag::ALIGN_RIGHT | xui::alignment_flag::ALIGN_BOTTOM },
-        { "leftvcenter", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_VCENTER },
-        { "vcenterleft", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_VCENTER },
-        { "rightvcenter", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_VCENTER },
-        { "vcenterright", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_VCENTER },
-        { "tophcenter", xui::alignment_flag::ALIGN_TOP | xui::alignment_flag::ALIGN_HCENTER },
-        { "hcentertop", xui::alignment_flag::ALIGN_TOP | xui::alignment_flag::ALIGN_HCENTER },
-        { "bottomhcenter", xui::alignment_flag::ALIGN_BOTTOM | xui::alignment_flag::ALIGN_HCENTER },
-        { "hcenterbottom", xui::alignment_flag::ALIGN_BOTTOM | xui::alignment_flag::ALIGN_HCENTER },
-        { "vcenterhcenter"	, xui::alignment_flag::ALIGN_CENTER },
-        { "hcentervcenter"	, xui::alignment_flag::ALIGN_CENTER },
+        { "left", xui::alignment_flag::ALIGN_LEFT },
+        { "right", xui::alignment_flag::ALIGN_RIGHT },
+        { "top", xui::alignment_flag::ALIGN_TOP },
+        { "bottom", xui::alignment_flag::ALIGN_BOTTOM },
+        { "center", xui::alignment_flag::ALIGN_CENTER },
+        { "vcenter", xui::alignment_flag::ALIGN_VCENTER },
+        { "hcenter", xui::alignment_flag::ALIGN_HCENTER },
+        { "left top", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_TOP },
+        { "top left", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_TOP },
+        { "left bottom", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_BOTTOM },
+        { "bottom left", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_BOTTOM },
+        { "right top", xui::alignment_flag::ALIGN_RIGHT | xui::alignment_flag::ALIGN_TOP },
+        { "top right", xui::alignment_flag::ALIGN_RIGHT | xui::alignment_flag::ALIGN_TOP },
+        { "right bottom", xui::alignment_flag::ALIGN_RIGHT | xui::alignment_flag::ALIGN_BOTTOM },
+        { "bottom right", xui::alignment_flag::ALIGN_RIGHT | xui::alignment_flag::ALIGN_BOTTOM },
+        { "left vcenter", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_VCENTER },
+        { "vcenter left", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_VCENTER },
+        { "right vcenter", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_VCENTER },
+        { "vcenter right", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_VCENTER },
+        { "top hcenter", xui::alignment_flag::ALIGN_TOP | xui::alignment_flag::ALIGN_HCENTER },
+        { "hcenter top", xui::alignment_flag::ALIGN_TOP | xui::alignment_flag::ALIGN_HCENTER },
+        { "bottom hcenter", xui::alignment_flag::ALIGN_BOTTOM | xui::alignment_flag::ALIGN_HCENTER },
+        { "hcenter bottom", xui::alignment_flag::ALIGN_BOTTOM | xui::alignment_flag::ALIGN_HCENTER },
+        { "vcenter hcenter", xui::alignment_flag::ALIGN_CENTER },
+        { "hcenter vcenter", xui::alignment_flag::ALIGN_CENTER },
 
         // direction
-        { "leftright", (std::uint32_t)xui::direction::LEFT_RIGHT },
-        { "rightleft", (std::uint32_t)xui::direction::RIGHT_LEFT },
-        { "topbottom", (std::uint32_t)xui::direction::TOP_BOTTOM },
-        { "bottomtop", (std::uint32_t)xui::direction::BOTTOM_TOP },
+        { "ltr", (std::uint32_t)xui::direction::LEFT_RIGHT },
+        { "rtl", (std::uint32_t)xui::direction::RIGHT_LEFT },
+        { "ttb", (std::uint32_t)xui::direction::TOP_BOTTOM },
+        { "btt", (std::uint32_t)xui::direction::BOTTOM_TOP },
+        { "left right", (std::uint32_t)xui::direction::LEFT_RIGHT },
+        { "right left", (std::uint32_t)xui::direction::RIGHT_LEFT },
+        { "top bottom", (std::uint32_t)xui::direction::TOP_BOTTOM },
+        { "bottom top", (std::uint32_t)xui::direction::BOTTOM_TOP },
+        { "left to right", (std::uint32_t)xui::direction::LEFT_RIGHT },
+        { "right to left", (std::uint32_t)xui::direction::RIGHT_LEFT },
+        { "top to bottom", (std::uint32_t)xui::direction::TOP_BOTTOM },
+        { "bottom to top", (std::uint32_t)xui::direction::BOTTOM_TOP },
     };
     return style_flags;
 }
@@ -941,9 +1061,9 @@ std::map<std::string_view, std::uint32_t> & xui::style::colors()
     return style_colors;
 }
 
-std::map<std::string_view, std::function<xui::style::variant( std::string_view )>> & xui::style::functions()
+std::map<std::string_view, std::function<xui::style::variant( std::string_view::iterator &, std::string_view::iterator )>> & xui::style::functions()
 {
-    static std::map<std::string_view, std::function<xui::style::variant( std::string_view )>> style_functions =
+    static std::map<std::string_view, std::function<xui::style::variant( std::string_view::iterator &, std::string_view::iterator )>> style_functions =
     {
         {"url", xui::style::parse_url },
         {"rgb", xui::style::parse_rgb },
@@ -952,6 +1072,12 @@ std::map<std::string_view, std::function<xui::style::variant( std::string_view )
         {"vec4", xui::style::parse_vec4 },
         {"dark", xui::style::parse_dark },
         {"light", xui::style::parse_light },
+        {"hatch", xui::style::parse_hatch },
+        {"sample", xui::style::parse_sample },
+        {"linear", xui::style::parse_linear },
+        {"stroke", xui::style::parse_stroke },
+        {"border", xui::style::parse_border },
+        {"filled", xui::style::parse_filled },
     };
     return style_functions;
 }
@@ -964,12 +1090,12 @@ public:
         , _commands( res )
         , _rects( res )
         , _types( res )
+        , _focus( res )
         , _fonts( res )
-        , _ids( res )
         , _styles( res )
+        , _strids( res )
         , _windows( res )
         , _textures( res )
-        , _windowflags( res )
     {
     }
 
@@ -983,14 +1109,15 @@ public:
     std::pmr::vector<xui::drawcmd> _commands;
 
 public:
+    int _str_id = 0;
     std::pmr::deque<xui::rect> _rects;
-    std::pmr::deque<std::string> _types;
+    std::pmr::deque<style_type> _types;
+    std::pmr::deque<focus_type> _focus;
     std::pmr::deque<xui::font_id> _fonts;
-    std::pmr::deque<xui::string_id> _ids;
     std::pmr::deque<xui::style *> _styles;
+    std::pmr::deque<xui::string_id> _strids;
     std::pmr::deque<xui::window_id> _windows;
     std::pmr::deque<xui::texture_id> _textures;
-    std::pmr::deque<xui::window_flag> _windowflags;
 };
 
 xui::context::context( std::pmr::memory_resource * res )
@@ -1012,65 +1139,56 @@ std::string_view xui::context::dark_style()
     return
 R"(
     *{
-        border-width: 1;
-        border-style: solid;
-
-        margin-left: 0;
-        margin-right: 0;
-        margin-top: 0;
-        margin-bottom: 0;
-
-        padding-left: 0;
-        padding-right: 0;
-        padding-top: 0;
-        padding-bottom: 0;
-
         font-color: white;
+
+        margin: vec4( 0, 0, 0, 0 );
+        padding: vec4( 0, 0, 0, 0 );
+
+        filled: filled( solid, black );
+        stroke: stroke( solid, 1, white );
+        border: border( solid, 1, white, vec4( 0, 0, 0, 0 ) );
     },
     window{
-        background-color: black;
-        border-radius: vec4(10, 10, 10, 10);
+        border: border( solid, 1, transparent, vec4( 10, 10, 10, 10 ) );
+        filled: filled( solid, black );
     },
     window-titlebar{
-        background-color: rgb(76, 74, 72);
-        border-radius: vec4(10, 10, 0, 0);
+        filled: filled( solid, rgb(76, 74, 72) );
+        border: border( solid, 1, transparent, vec4( 10, 10, 0, 0 ) );
     },
     window-titlebar-title{
         font-color: white;
         text-align: left vcenter;
     },
     window-titlebar-closebox{
-        stroke-color: white;
-        border-color: transparent;
-        background-color: transparent;
-        border-radius: vec4(0, 10, 0, 0);
+        stroke: stroke( solid, 1, white );
+        filled: filled( solid, transparent );
+        border: border( solid, 1, transparent, vec4( 0, 10, 0, 0 ) );
     },
     window-titlebar-closebox:hover{
-        stroke-color: white;
-        border-color: transparent;
-        background-color: red;
+        stroke: stroke( solid, 1, white );
+        border: border( solid, 1, transparent, vec4( 0, 10, 0, 0 ) );
+        filled: filled( solid, red );
     },
     window-titlebar-minimizebox{
-        stroke-color: white;
-        border-color: transparent;
-        background-color: transparent;
-        border-radius: vec4(0, 0, 0, 0);
+        stroke: stroke( solid, 1, white );
+        border: border( solid, 1, transparent, vec4( 0, 0, 0, 0 ) );
+        filled: filled( solid, transparent );
     },
     window-titlebar-minimizebox:hover{
-        stroke-color: white;
-        border-color: transparent;
-        background-color: rgb(94, 92, 91);
+        stroke: stroke( solid, 1, white );
+        border: border( solid, 1, transparent, vec4( 0, 0, 0, 0 ) );
+        filled: filled( solid, rgb(94, 92, 91) );
     },
     window-titlebar-maximizebox{
-        stroke-color: white;
-        border-color: transparent;
-        background-color: transparent;
-        border-radius: vec4(0, 0, 0, 0);
+        stroke: stroke( solid, 1, white );
+        border: border( solid, 1, transparent, vec4( 0, 0, 0, 0 ) );
+        filled: filled( solid, transparent );
     },
     window-titlebar-maximizebox:hover{
-        stroke-color: white;
-        border-color: transparent;
-        background-color: rgb(94, 92, 91);
+        stroke: stroke( solid, 1, white );
+        border: border( solid, 1, transparent, vec4( 0, 0, 0, 0 ) );
+        filled: filled( solid, rgb(94, 92, 91) );
     },
     menubar{
     },
@@ -1080,25 +1198,25 @@ R"(
     image{
     },
     slider{
-        border-color: white;
-        background-color: white;
-        direction: bottom top;
+        border: border( solid, 1, white, vec4( 0, 0, 0, 0 ) );
+        filled: filled( solid, white );
+        direction: bottom to top;
     },
     slider:hover{
-        border-color: white;
-        background-color: green;
+        border: border( solid, 1, white, vec4( 0, 0, 0, 0 ) );
+        filled: filled( solid, green );
     },
     slider:active{
-        border-color: white;
-        background-color: yellow;
+        border: border( solid, 1, white, vec4( 0, 0, 0, 0 ) );
+        filled: filled( solid, yellow );
     },
     slider-cursor{
-        border-color: transparent;
-        background-color: red;
+        border: border( solid, 1, transparent, vec4( 0, 0, 0, 0 ) );
+        filled: filled( solid, red );
     },
     process{
-        border-color: white;
-        background-color: rgb(94, 92, 91);
+        border: border( solid, 1, white, vec4( 0, 0, 0, 0 ) );
+        filled: filled( solid, rgb( 94, 92, 91 ) );
     },
     process-text{
         font-color: white;
@@ -1106,21 +1224,20 @@ R"(
     },
     process-cursor{
         border-color: transparent;
-        background-color: red;
-        direction: bottom top;
+        filled: filled( solid, red );
+        direction: left to right;
     },
     button{
-        border-color: black;
-        background-color: white;
-        border-radius: vec4(10, 10, 0, 0);
+        border: border( solid, 1, black, vec4( 10, 0, 10, 0 ) );
+        filled: filled( solid, white );
     },
     button:hover{
-        border-color: black;
-        background-color: red;
+        border: border( solid, 1, black, vec4( 10, 0, 10, 0 ) );
+        filled: filled( solid, red );
     },
     button:active{
-        border-color: black;
-        background-color: green;
+        border: border( solid, 1, black, vec4( 10, 0, 10, 0 ) );
+        filled: filled( solid, green );
     },
     button-text{
         font-color: black;
@@ -1133,45 +1250,43 @@ R"(
         font-color: red;
     },
     radio{
-        border-color: white;
-        background-color: blue;
+        border: border( solid, 1, white, vec4( 0, 0, 0, 0 ) );
+        filled: filled( solid, blue );
     },
     radio:hover{
-        background-color: light( blue );
+        filled: filled( solid, light( blue ) );
     },
     radio:active{
-        background-color: green;
+        filled: filled( solid, green );
     },
     radio-indicator{
-        background-color: white;
+        filled: filled( solid, white );
     },
     check{
-        border-color: white;
-        background-color: blue;
+        border: border( solid, 1, white, vec4( 0, 0, 0, 0 ) );
+        filled: filled( solid, blue );
     },
     check:hover{
-        background-color: light( blue );
+        filled: filled( solid, light( blue ) );
     },
     check:active{
-        background-color: green;
+        filled: filled( solid, green );
     },
     check-indicator{
-        stroke-color: white;
-        stroke-width: 3;
+        stroke: stroke( solid, 3, white );
     },
     scrollbar{
-        border-color: white;
-        background-color: green;
+        border: border( solid, 1, white, vec4( 0, 0, 0, 0 ) );
+        filled: filled( solid, green );
     },
     scrollbar-cursor{
-        border-color: white;
-        background-color: red;
+        border: border( solid, 1, white, vec4( 0, 0, 0, 0 ) );
+        filled: filled( solid, red );
     },
     scrollbar-arrow{
-        border-color: white;
-        background-color: blue;
-        stroke-color: white;
-        stroke-width: 3;
+        border: border( solid, 1, white, vec4( 0, 0, 0, 0 ) );
+        filled: filled( solid, blue );
+        stroke: stroke( solid, 3, white );
     },
     combobox{
     },
@@ -1233,15 +1348,10 @@ void xui::context::pop_style()
     _p->_styles.pop_back();
 }
 
-xui::style::variant xui::context::current_style( std::string_view attr )
+xui::style::variant xui::context::current_style( std::string_view attr ) const
 {
-    std::string name{ _p->_types.back() };
+    std::string name = style_name();
 
-    if ( !_p->_ids.empty() )
-    {
-        name.append( "#" );
-        name.append( _p->_ids.back() );
-    }
     name.append( "@" );
     name.append( attr );
 
@@ -1253,6 +1363,51 @@ xui::style::variant xui::context::current_style( std::string_view attr )
     }
 
     return {};
+}
+
+void xui::context::push_style_type( std::string_view type )
+{
+    _p->_types.push_back( { type.begin(), type.end(), _p->_res } );
+}
+
+void xui::context::pop_style_type()
+{
+    _p->_types.pop_back();
+}
+
+std::string_view xui::context::current_style_type() const
+{
+    return _p->_types.back().type;
+}
+
+void xui::context::push_style_element( std::string_view element )
+{
+    _p->_types.back().elements.push_back( { element.begin(), element.end() } );
+}
+
+void xui::context::pop_style_element()
+{
+    _p->_types.back().elements.pop_back();
+}
+
+std::string_view xui::context::current_style_element() const
+{
+    return _p->_types.back().elements.back();
+}
+
+void xui::context::push_style_action( std::string_view action )
+{
+    _p->_types.back().actions.push_back( { action.begin(), action.end() } );
+}
+
+void xui::context::pop_style_action()
+{
+    _p->_types.back().actions.pop_back();
+}
+
+std::string_view xui::context::current_style_action() const
+{
+    return _p->_types.back().actions.back();
 }
 
 void xui::context::push_font( xui::font_id font )
@@ -1276,69 +1431,6 @@ xui::font_id xui::context::current_font() const
     return _p->_fonts.back();
 }
 
-void xui::context::push_window( xui::window_id id )
-{
-    _p->_windows.push_back( id );
-}
-
-void xui::context::pop_window()
-{
-    return _p->_windows.pop_back();
-}
-
-xui::window_id xui::context::current_window() const
-{
-    if ( _p->_windows.empty() )
-    {
-        XUI_ERR( ERR_NO );
-        return xui::invalid_id;
-    }
-
-    return _p->_windows.back();
-}
-
-void xui::context::push_texture( xui::texture_id id )
-{
-    _p->_textures.push_back( id );
-}
-
-void xui::context::pop_texture()
-{
-    _p->_textures.pop_back();
-}
-
-xui::texture_id xui::context::current_texture() const
-{
-    if ( _p->_textures.empty() )
-    {
-        XUI_ERR( ERR_NO );
-        return xui::invalid_id;
-    }
-
-    return _p->_textures.back();
-}
-
-void xui::context::push_string_id( xui::string_id id )
-{
-    _p->_ids.push_back( id );
-}
-
-void xui::context::pop_string_id()
-{
-    _p->_ids.pop_back();
-}
-
-xui::string_id xui::context::current_string_id() const
-{
-    if ( _p->_ids.empty() )
-    {
-        XUI_ERR( ERR_NO );
-        return {};
-    }
-
-    return _p->_ids.back();
-}
-
 void xui::context::push_rect( const xui::rect & rect )
 {
     _p->_rects.push_back( rect );
@@ -1360,24 +1452,95 @@ xui::rect xui::context::currrent_rect() const
     return _p->_rects.back();
 }
 
-void xui::context::push_window_flag( xui::window_flag flag )
+void xui::context::push_string_id( xui::string_id id )
 {
-    _p->_windowflags.push_back( flag );
+    _p->_strids.push_back( id );
 }
 
-void xui::context::pop_window_flag()
+void xui::context::pop_string_id()
 {
-    _p->_windowflags.pop_back();
+    _p->_strids.pop_back();
 }
 
-xui::window_flag xui::context::current_flag() const
+xui::string_id xui::context::current_string_id() const
 {
-    return _p->_windowflags.back();
+    if ( _p->_strids.empty() )
+    {
+        XUI_ERR( ERR_NO );
+        return {};
+    }
+
+    return _p->_strids.back();
+}
+
+void xui::context::push_window_id( xui::window_id id )
+{
+    _p->_windows.push_back( id );
+}
+
+void xui::context::pop_window_id()
+{
+    return _p->_windows.pop_back();
+}
+
+xui::window_id xui::context::current_window_id() const
+{
+    if ( _p->_windows.empty() )
+    {
+        XUI_ERR( ERR_NO );
+        return xui::invalid_id;
+    }
+
+    return _p->_windows.back();
+}
+
+void xui::context::push_texture_id( xui::texture_id id )
+{
+    _p->_textures.push_back( id );
+}
+
+void xui::context::pop_texture_id()
+{
+    _p->_textures.pop_back();
+}
+
+xui::texture_id xui::context::current_texture_id() const
+{
+    if ( _p->_textures.empty() )
+    {
+        XUI_ERR( ERR_NO );
+        return xui::invalid_id;
+    }
+
+    return _p->_textures.back();
 }
 
 void xui::context::begin()
 {
+    _p->_str_id = 0;
     _p->_commands.clear();
+
+    while ( !_p->_focus.empty() )
+    {
+        if ( _p->_focus.back().event >= xui::event::KEY_EVENT_BEG && _p->_focus.back().event <= xui::event::KEY_EVENT_END )
+        {
+
+        }
+        else if ( _p->_focus.back().event >= xui::event::GAMEPAD_EVENT_BEG && _p->_focus.back().event <= xui::event::GAMEPAD_EVENT_END )
+        {
+
+        }
+        else if ( _p->_focus.back().event >= xui::event::MOUSE_EVENT_BEG && _p->_focus.back().event <= xui::event::MOUSE_EVENT_END )
+        {
+            if ( _p->_impl->get_event( _p->_focus.back().id, _p->_focus.back().event ) == 0 )
+            {
+                _p->_focus.pop_back();
+                continue;
+            }
+        }
+
+        break;
+    }
 }
 
 std::span<xui::drawcmd> xui::context::end()
@@ -1389,7 +1552,13 @@ std::span<xui::drawcmd> xui::context::end()
 
 bool xui::context::begin_window( std::string_view title, xui::texture_id icon_id, int flags )
 {
-    auto id = current_window();
+    std::string str_id = std::to_string( _p->_str_id++ );
+    return begin_window( str_id, title, icon_id, flags );
+}
+
+bool xui::context::begin_window( xui::string_id str_id, std::string_view title, xui::texture_id icon_id, int flags )
+{
+    auto id = current_window_id();
     auto wrect = currrent_rect();
     auto cursorpos = _p->_impl->get_cursor( id );
 
@@ -1397,7 +1566,7 @@ bool xui::context::begin_window( std::string_view title, xui::texture_id icon_id
 
     auto status = _p->_impl->get_window_status( id );
 
-    if ( (status & xui::window_status::WINDOW_SHOW ) != 0 )
+    if ( ( status & xui::window_status::WINDOW_SHOW ) != 0 )
     {
         draw_style_type( "window", [&]()
         {
@@ -1415,12 +1584,7 @@ bool xui::context::begin_window( std::string_view title, xui::texture_id icon_id
 
             if ( ( flags & xui::window_flag::WINDOW_NO_BACKGROUND ) == 0 )
             {
-                draw_rect( wrect,
-                           current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-                           current_style( "border-width", 1.0f ),
-                           current_style( "border-color", xui::color() ),
-                           current_style( "border-radius", xui::vec4() ),
-                           current_style( "background-color", xui::color() ) );
+                draw_rect( wrect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
             }
             if ( ( flags & xui::window_flag::WINDOW_NO_TITLEBAR ) == 0 )
             {
@@ -1429,12 +1593,7 @@ bool xui::context::begin_window( std::string_view title, xui::texture_id icon_id
 
                 draw_style_element( "titlebar", [&]()
                 {
-                    draw_rect( title_rect,
-                               current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-                               current_style( "border-width", 1.0f ),
-                               current_style( "border-color", xui::color() ),
-                               current_style( "border-radius", xui::vec4() ),
-                               current_style( "background-color", xui::color() ) );
+                    draw_rect( title_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
                     draw_image( icon_id, { 8, 5, 20, 20 } );
 
@@ -1453,26 +1612,15 @@ bool xui::context::begin_window( std::string_view title, xui::texture_id icon_id
                             _p->_impl->remove_window( id );
                         else if ( ( ( flags & xui::window_flag::WINDOW_NO_CLOSEBOX ) == 0 ) && _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && box_rect.contains( cursorpos ) )
                             draw_style_action( "hover", [&]()
-                            {
-                                draw_rect( box_rect,
-                                current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-                                current_style( "border-width", 1.0f ),
-                                current_style( "border-color", xui::color() ),
-                                current_style( "border-radius", xui::vec4() ),
-                                current_style( "background-color", xui::color() ) );
-                            } );
+                        {
+                            draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                        } );
                         else
-                            draw_rect( box_rect,
-                                       current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-                                       current_style( "border-width", 1.0f ),
-                                       current_style( "border-color", xui::color() ),
-                                       current_style( "border-radius", xui::vec4() ),
-                                       current_style( "background-color", xui::color() ) );
+                            draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
-                        draw_path( current_style( "stroke-style", xui::drawcmd::stroke::SOLID ),
-                                   current_style( "stroke-width", 1.0f ),
-                                   ( ( flags & xui::window_flag::WINDOW_NO_CLOSEBOX ) == 0 ) ? current_style( "stroke-color", xui::color() ) : current_style( "stroke-color", xui::color() ).dark(),
-                                   current_style( "background-color", xui::color() ) )
+                        auto stroke = current_style( "stroke", xui::stroke() );
+                        if ( ( flags & xui::window_flag::WINDOW_NO_CLOSEBOX ) != 0 ) stroke.color = stroke.color.dark();
+                        draw_path( stroke, current_style( "filled", xui::filled() ) )
                             .moveto( { box_rect.center().x - 5, box_rect.center().y - 5 } )
                             .lineto( { box_rect.center().x + 5, box_rect.center().y + 5 } )
                             .closepath()
@@ -1489,28 +1637,17 @@ bool xui::context::begin_window( std::string_view title, xui::texture_id icon_id
                             _p->_impl->set_window_status( id, ( ( status & xui::window_status::WINDOW_MAXIMIZE ) != 0 ) ? xui::window_status::WINDOW_RESTORE : xui::window_status::WINDOW_MAXIMIZE );
                         else if ( ( ( flags & xui::window_flag::WINDOW_NO_MAXIMIZEBOX ) == 0 ) && _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && box_rect.contains( cursorpos ) )
                             draw_style_action( "hover", [&]()
-                            {
-                                draw_rect( box_rect,
-                                current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-                                current_style( "border-width", 1.0f ),
-                                current_style( "border-color", xui::color() ),
-                                current_style( "border-radius", xui::vec4() ),
-                                current_style( "background-color", xui::color() ) );
-                            } );
+                        {
+                            draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                        } );
                         else
-                            draw_rect( box_rect,
-                                       current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-                                       current_style( "border-width", 1.0f ),
-                                       current_style( "border-color", xui::color() ),
-                                       current_style( "border-radius", xui::vec4() ),
-                                       current_style( "background-color", xui::color() ) );
+                            draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
                         if ( ( status & xui::window_status::WINDOW_MAXIMIZE ) != 0 )
                         {
-                            draw_path( current_style( "stroke-style", xui::drawcmd::stroke::SOLID ),
-                                       current_style( "stroke-width", 1.0f ),
-                                       ( ( flags & xui::window_flag::WINDOW_NO_MAXIMIZEBOX ) == 0 ) ? current_style( "stroke-color", xui::color() ) : current_style( "stroke-color", xui::color() ).dark(),
-                                       current_style( "background-color", xui::color() ) )
+                            auto stroke = current_style( "stroke", xui::stroke() );
+                            if ( ( flags & xui::window_flag::WINDOW_NO_MAXIMIZEBOX ) != 0 ) stroke.color = stroke.color.dark();
+                            draw_path( stroke, current_style( "filled", xui::filled() ) )
                                 .moveto( { box_rect.center().x - 3, box_rect.center().y - 5 } )
                                 .lineto( { box_rect.center().x - 3, box_rect.center().y + 3 } )
                                 .lineto( { box_rect.center().x + 5, box_rect.center().y + 3 } )
@@ -1526,10 +1663,9 @@ bool xui::context::begin_window( std::string_view title, xui::texture_id icon_id
                         }
                         else
                         {
-                            draw_path( current_style( "stroke-style", xui::drawcmd::stroke::SOLID ),
-                                       current_style( "stroke-width", 1.0f ),
-                                       ( ( flags & xui::window_flag::WINDOW_NO_MAXIMIZEBOX ) == 0 ) ? current_style( "stroke-color", xui::color() ) : current_style( "stroke-color", xui::color() ).dark(),
-                                       current_style( "background-color", xui::color() ) )
+                            auto stroke = current_style( "stroke", xui::stroke() );
+                            if ( ( flags & xui::window_flag::WINDOW_NO_MAXIMIZEBOX ) != 0 ) stroke.color = stroke.color.dark();
+                            draw_path( stroke, current_style( "filled", xui::filled() ) )
                                 .moveto( { box_rect.center().x - 5, box_rect.center().y - 5 } )
                                 .lineto( { box_rect.center().x - 5, box_rect.center().y + 5 } )
                                 .lineto( { box_rect.center().x + 5, box_rect.center().y + 5 } )
@@ -1547,26 +1683,15 @@ bool xui::context::begin_window( std::string_view title, xui::texture_id icon_id
                             _p->_impl->set_window_status( id, xui::window_status::WINDOW_MINIMIZE );
                         else if ( ( ( flags & xui::window_flag::WINDOW_NO_MINIMIZEBOX ) == 0 ) && _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && box_rect.contains( cursorpos ) )
                             draw_style_action( "hover", [&]()
-                            {
-                                draw_rect( box_rect,
-                                current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-                                current_style( "border-width", 1.0f ),
-                                current_style( "border-color", xui::color() ),
-                                current_style( "border-radius", xui::vec4() ),
-                                current_style( "background-color", xui::color() ) );
-                            } );
+                        {
+                            draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                        } );
                         else
-                            draw_rect( box_rect,
-                                       current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-                                       current_style( "border-width", 1.0f ),
-                                       current_style( "border-color", xui::color() ),
-                                       current_style( "border-radius", xui::vec4() ),
-                                       current_style( "background-color", xui::color() ) );
+                            draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
-                        draw_path( current_style( "stroke-style", xui::drawcmd::stroke::SOLID ),
-                                   current_style( "stroke-width", 1.0f ),
-                                   ( ( flags & xui::window_flag::WINDOW_NO_MINIMIZEBOX ) == 0 ) ? current_style( "stroke-color", xui::color() ) : current_style( "stroke-color", xui::color() ).dark(),
-                                   current_style( "background-color", xui::color() ) )
+                        auto stroke = current_style( "stroke", xui::stroke() );
+                        if ( ( flags & xui::window_flag::WINDOW_NO_MINIMIZEBOX ) != 0 ) stroke.color = stroke.color.dark();
+                        draw_path( stroke, current_style( "filled", xui::filled() ) )
                             .moveto( { box_rect.center().x - 5, box_rect.center().y } )
                             .lineto( { box_rect.center().x + 5, box_rect.center().y } )
                             .closepath();
@@ -1575,10 +1700,7 @@ bool xui::context::begin_window( std::string_view title, xui::texture_id icon_id
             }
             if ( ( flags & xui::window_flag::WINDOW_NO_RESIZE ) != 0 )
             {
-                draw_path( current_style( "stroke-style", xui::drawcmd::stroke::SOLID ),
-                           current_style( "stroke-width", 1.0f ),
-                           current_style( "stroke-color", xui::color() ),
-                           current_style( "background-color", xui::color() ) )
+                draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
                     .moveto( { resize_rect.x, resize_rect.y + resize_rect.h } )
                     .lineto( { resize_rect.x + resize_rect.w, resize_rect.y + resize_rect.h } )
                     .lineto( { resize_rect.x + resize_rect.w, resize_rect.y } )
@@ -1600,21 +1722,51 @@ void xui::context::end_window()
 
 bool xui::context::image( xui::texture_id id )
 {
-    draw_style_type( "image", [&]() { draw_image( id, currrent_rect() ); } );
+    std::string str_id = std::to_string( _p->_str_id++ );
+    return image( str_id, id );
+}
+
+bool xui::context::image( xui::string_id str_id, xui::texture_id id )
+{
+    push_string_id( str_id );
+
+    draw_style_type( "image", [&]()
+    {
+        draw_image( id, currrent_rect() );
+    } );
 
     return true;
 }
 
 bool xui::context::label( std::string_view text )
 {
-    draw_style_type( "label", [&]() { draw_text( text, current_font(), currrent_rect(), current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) ); } );
+    std::string str_id = std::to_string( _p->_str_id++ );
+    return label( str_id, text );
+}
+
+bool xui::context::label( xui::string_id str_id, std::string_view text )
+{
+    push_string_id( str_id );
+
+    draw_style_type( "label", [&]()
+    {
+        draw_text( text, current_font(), currrent_rect(), current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
+    } );
 
     return true;
 }
 
 bool xui::context::radio( bool & checked )
 {
-    auto id = current_window();
+    std::string str_id = std::to_string( _p->_str_id++ );
+    return radio( str_id, checked );
+}
+
+bool xui::context::radio( xui::string_id str_id, bool & checked )
+{
+    push_string_id( str_id );
+
+    auto id = current_window_id();
     auto rect = currrent_rect();
     float raduis = std::min( rect.w, rect.h ) / 2;
     std::string_view action;
@@ -1634,12 +1786,7 @@ bool xui::context::radio( bool & checked )
 
         draw_style_action( action, [&]()
         {
-            draw_circle( { rect.x + raduis, rect.y + raduis }, raduis,
-            current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-            current_style( "border-width", 1.0f ),
-            current_style( "border-color", xui::color() ),
-            current_style( "border-radius", xui::vec4() ),
-            current_style( "background-color", xui::color() ) );
+            draw_circle( { rect.x + raduis, rect.y + raduis }, raduis, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
         } );
 
         if ( checked )
@@ -1648,12 +1795,7 @@ bool xui::context::radio( bool & checked )
             {
                 draw_style_action( action, [&]()
                 {
-                    draw_circle( { rect.x + raduis, rect.y + raduis }, ( raduis * 0.7f ),
-                    current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-                    current_style( "border-width", 1.0f ),
-                    current_style( "border-color", xui::color() ),
-                    current_style( "border-radius", xui::vec4() ),
-                    current_style( "background-color", xui::color() ) );
+                    draw_circle( { rect.x + raduis, rect.y + raduis }, ( raduis * 0.7f ), current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
                 } );
             } );
         }
@@ -1664,7 +1806,15 @@ bool xui::context::radio( bool & checked )
 
 bool xui::context::check( bool & checked )
 {
-    auto id = current_window();
+    std::string str_id = std::to_string( _p->_str_id++ );
+    return check( str_id, checked );
+}
+
+bool xui::context::check( xui::string_id str_id, bool & checked )
+{
+    push_string_id( str_id );
+
+    auto id = current_window_id();
     auto rect = currrent_rect();
     rect.w = std::min( rect.w, rect.h );
     rect.h = rect.w;
@@ -1686,12 +1836,7 @@ bool xui::context::check( bool & checked )
 
         draw_style_action( action, [&]()
         {
-            draw_rect( rect,
-            current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-            current_style( "border-width", 1.0f ),
-            current_style( "border-color", xui::color() ),
-            current_style( "border-radius", xui::vec4() ),
-            current_style( "background-color", xui::color() ) );
+            draw_rect( rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
         } );
 
         if ( checked )
@@ -1700,14 +1845,10 @@ bool xui::context::check( bool & checked )
             {
                 draw_style_action( action, [&]()
                 {
-                    draw_path(
-                        current_style( "stroke-style", xui::drawcmd::stroke::SOLID ),
-                        current_style( "stroke-width", 1.0f ),
-                        current_style( "stroke-color", xui::color() ),
-                        current_style( "background-color", xui::color() ) )
-                    .moveto( { rect.x + ( rect.w * 0.2f ), rect.y + ( rect.h * 0.5f ) } )
-                    .lineto( { rect.x + ( rect.w * 0.4f ), rect.y + ( rect.h * 0.7f ) } )
-                    .lineto( { rect.x + ( rect.w * 0.8f ), rect.y + ( rect.h * 0.2f ) } );
+                    draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                        .moveto( { rect.x + ( rect.w * 0.2f ), rect.y + ( rect.h * 0.5f ) } )
+                        .lineto( { rect.x + ( rect.w * 0.4f ), rect.y + ( rect.h * 0.7f ) } )
+                        .lineto( { rect.x + ( rect.w * 0.8f ), rect.y + ( rect.h * 0.2f ) } );
                 } );
             } );
         }
@@ -1718,7 +1859,15 @@ bool xui::context::check( bool & checked )
 
 bool xui::context::button( std::string_view text )
 {
-    auto id = current_window();
+    std::string str_id = std::to_string( _p->_str_id++ );
+    return button( str_id, text );
+}
+
+bool xui::context::button( xui::string_id str_id, std::string_view text )
+{
+    push_string_id( str_id );
+
+    auto id = current_window_id();
     auto rect = currrent_rect();
 
     std::string_view action;
@@ -1733,12 +1882,7 @@ bool xui::context::button( std::string_view text )
 
         draw_style_action( action, [&]()
         {
-            draw_rect( rect,
-            current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-            current_style( "border-width", 1.0f ),
-            current_style( "border-color", xui::color() ),
-            current_style( "border-radius", xui::vec4() ),
-            current_style( "background-color", xui::color() ) );
+            draw_rect( rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
         } );
 
         draw_style_element( "text", [&]()
@@ -1761,12 +1905,20 @@ bool xui::context::button( std::string_view text )
         } );
     } );
 
-    return ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT) && rect.contains( _p->_impl->get_cursor( id ) ) );
+    return ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && rect.contains( _p->_impl->get_cursor( id ) ) );
 }
 
 float xui::context::slider( float & value, float min, float max )
 {
-    auto id = current_window();
+    std::string str_id = std::to_string( _p->_str_id++ );
+    return slider( str_id, value, min, max );
+}
+
+float xui::context::slider( xui::string_id str_id, float & value, float min, float max )
+{
+    push_string_id( str_id );
+
+    auto id = current_window_id();
     std::string_view action;
 
     draw_style_type( "slider", [&]()
@@ -1780,12 +1932,7 @@ float xui::context::slider( float & value, float min, float max )
 
         draw_style_action( action, [&]()
         {
-            draw_rect( back_rect,
-            current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-            current_style( "border-width", 1.0f ),
-            current_style( "border-color", xui::color() ),
-            current_style( "border-radius", xui::vec4() ),
-            current_style( "background-color", xui::color() ) );
+            draw_rect( back_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
         } );
 
         draw_style_element( "cursor", [&]()
@@ -1877,12 +2024,7 @@ float xui::context::slider( float & value, float min, float max )
 
             draw_style_action( action, [&]()
             {
-                draw_rect( cursor_rect,
-                current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-                current_style( "border-width", 1.0f ),
-                current_style( "border-color", xui::color() ),
-                current_style( "border-radius", xui::vec4() ),
-                current_style( "background-color", xui::color() ) );
+                draw_rect( cursor_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
             } );
         } );
     } );
@@ -1892,16 +2034,19 @@ float xui::context::slider( float & value, float min, float max )
 
 bool xui::context::process( float value, float min, float max, std::string_view text )
 {
+    std::string str_id = std::to_string( _p->_str_id++ );
+    return process( str_id, value, min, max, text );
+}
+
+bool xui::context::process( xui::string_id str_id, float value, float min, float max, std::string_view text )
+{
+    push_string_id( str_id );
+
     draw_style_type( "process", [&]()
     {
         auto back_rect = currrent_rect();
 
-        draw_rect( back_rect,
-                   current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-                   current_style( "border-width", 1.0f ),
-                   current_style( "border-color", xui::color() ),
-                   current_style( "border-radius", xui::vec4() ),
-                   current_style( "background-color", xui::color() ) );
+        draw_rect( back_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
         draw_style_element( "cursor", [&]()
         {
@@ -1926,12 +2071,7 @@ bool xui::context::process( float value, float min, float max, std::string_view 
                 break;
             }
 
-            draw_rect( cursor_rect,
-                       current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-                       current_style( "border-width", 1.0f ),
-                       current_style( "border-color", xui::color() ),
-                       current_style( "border-radius", xui::vec4() ),
-                       current_style( "background-color", xui::color() ) );
+            draw_rect( cursor_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
         } );
 
         if ( !text.empty() )
@@ -1948,7 +2088,13 @@ bool xui::context::process( float value, float min, float max, std::string_view 
 
 float xui::context::scrollbar( float & value, float step, float min, float max, xui::direction dir )
 {
-    auto id = current_window();
+    std::string str_id = std::to_string( _p->_str_id++ );
+    return scrollbar( str_id, value, step, min, max, dir );
+}
+
+float xui::context::scrollbar( xui::string_id str_id, float & value, float step, float min, float max, xui::direction dir )
+{
+    auto id = current_window_id();
     std::string_view action;
 
     draw_style_type( "scrollbar", [&]()
@@ -1957,7 +2103,9 @@ float xui::context::scrollbar( float & value, float step, float min, float max, 
         xui::vec2 pos = _p->_impl->get_cursor( id );
         float arrow_radius = std::min( back_rect.w, back_rect.h );
 
-        if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && back_rect.contains( pos ) )
+        if( current_focus() )
+            action = "active";
+        else if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && back_rect.contains( pos ) )
             action = "active";
         else if ( _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && back_rect.contains( pos ) )
             action = "hover";
@@ -1966,12 +2114,7 @@ float xui::context::scrollbar( float & value, float step, float min, float max, 
 
         draw_style_action( action, [&]()
         {
-            draw_rect( back_rect,
-            current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-            current_style( "border-width", 1.0f ),
-            current_style( "border-color", xui::color() ),
-            current_style( "border-radius", xui::vec4() ),
-            current_style( "background-color", xui::color() ) );
+            draw_rect( back_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
         } );
 
         draw_style_element( "cursor", [&]()
@@ -1989,8 +2132,14 @@ float xui::context::scrollbar( float & value, float step, float min, float max, 
             case xui::direction::LEFT_RIGHT:
             case xui::direction::RIGHT_LEFT:
                 detect_rect = { back_rect.x + arrow_radius,  back_rect.y, back_rect.w - arrow_radius * 2, back_rect.h };
-                if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && detect_rect.contains( pos ) )
+
+                if ( current_focus() )
                     action = "active";
+                else if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && detect_rect.contains( pos ) )
+                {
+                    action = "active";
+                    push_focus( xui::event::KEY_MOUSE_LEFT );
+                }
                 else if ( _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && detect_rect.contains( pos ) )
                     action = "hover";
                 else
@@ -1999,8 +2148,14 @@ float xui::context::scrollbar( float & value, float step, float min, float max, 
             case xui::direction::TOP_BOTTOM:
             case xui::direction::BOTTOM_TOP:
                 detect_rect = { back_rect.x,  back_rect.y + arrow_radius, back_rect.w, back_rect.h - arrow_radius * 2 };
-                if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && detect_rect.contains( pos ) )
+
+                if ( current_focus() )
                     action = "active";
+                else if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && detect_rect.contains( pos ) )
+                {
+                    action = "active";
+                    push_focus( xui::event::KEY_MOUSE_LEFT );
+                }
                 else if ( _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && detect_rect.contains( pos ) )
                     action = "hover";
                 else
@@ -2107,12 +2262,7 @@ float xui::context::scrollbar( float & value, float step, float min, float max, 
             {
                 draw_style_action( action, [&]()
                 {
-                    draw_rect( cursor_rect,
-                    current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-                    current_style( "border-width", 1.0f ),
-                    current_style( "border-color", xui::color() ),
-                    current_style( "border-radius", xui::vec4() ),
-                    current_style( "background-color", xui::color() ) );
+                    draw_rect( cursor_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
                 } );
             } );
         } );
@@ -2140,17 +2290,9 @@ float xui::context::scrollbar( float & value, float step, float min, float max, 
 
                     draw_style_action( action, [&]()
                     {
-                        draw_rect( arrow_rect,
-                        current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-                        current_style( "border-width", 1.0f ),
-                        current_style( "border-color", xui::color() ),
-                        current_style( "border-radius", xui::vec4() ),
-                        current_style( "background-color", xui::color() ) );
+                        draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
-                        draw_path( current_style( "stroke-style", xui::drawcmd::stroke::SOLID ),
-                                   current_style( "stroke-width", 1.0f ),
-                                   current_style( "stroke-color", xui::color() ),
-                                   current_style( "background-color", xui::color() ) )
+                        draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
                             .moveto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.5f } )
                             .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.3f } )
                             .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.7f } )
@@ -2173,17 +2315,9 @@ float xui::context::scrollbar( float & value, float step, float min, float max, 
 
                     draw_style_action( action, [&]()
                     {
-                        draw_rect( arrow_rect,
-                        current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-                        current_style( "border-width", 1.0f ),
-                        current_style( "border-color", xui::color() ),
-                        current_style( "border-radius", xui::vec4() ),
-                        current_style( "background-color", xui::color() ) );
+                        draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
-                        draw_path( current_style( "stroke-style", xui::drawcmd::stroke::SOLID ),
-                                   current_style( "stroke-width", 1.0f ),
-                                   current_style( "stroke-color", xui::color() ),
-                                   current_style( "background-color", xui::color() ) )
+                        draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
                             .moveto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.5f } )
                             .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.3f } )
                             .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.7f } )
@@ -2208,17 +2342,9 @@ float xui::context::scrollbar( float & value, float step, float min, float max, 
 
                     draw_style_action( action, [&]()
                     {
-                        draw_rect( arrow_rect,
-                        current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-                        current_style( "border-width", 1.0f ),
-                        current_style( "border-color", xui::color() ),
-                        current_style( "border-radius", xui::vec4() ),
-                        current_style( "background-color", xui::color() ) );
+                        draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
-                        draw_path( current_style( "stroke-style", xui::drawcmd::stroke::SOLID ),
-                                   current_style( "stroke-width", 1.0f ),
-                                   current_style( "stroke-color", xui::color() ),
-                                   current_style( "background-color", xui::color() ) )
+                        draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
                             .moveto( { arrow_rect.x + arrow_rect.w * 0.5f, arrow_rect.y + arrow_rect.h * 0.3f } )
                             .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.7f } )
                             .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.7f } )
@@ -2241,17 +2367,9 @@ float xui::context::scrollbar( float & value, float step, float min, float max, 
 
                     draw_style_action( action, [&]()
                     {
-                        draw_rect( arrow_rect,
-                        current_style( "border-style", xui::drawcmd::stroke::SOLID ),
-                        current_style( "border-width", 1.0f ),
-                        current_style( "border-color", xui::color() ),
-                        current_style( "border-radius", xui::vec4() ),
-                        current_style( "background-color", xui::color() ) );
+                        draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
-                        draw_path( current_style( "stroke-style", xui::drawcmd::stroke::SOLID ),
-                                   current_style( "stroke-width", 1.0f ),
-                                   current_style( "stroke-color", xui::color() ),
-                                   current_style( "background-color", xui::color() ) )
+                        draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
                             .moveto( { arrow_rect.x + arrow_rect.w * 0.5f, arrow_rect.y + arrow_rect.h * 0.7f } )
                             .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.3f } )
                             .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.3f } )
@@ -2267,36 +2385,6 @@ float xui::context::scrollbar( float & value, float step, float min, float max, 
 }
 
 
-void xui::context::push_style_type( std::string_view type )
-{
-    _p->_types.push_back( { type.begin(), type.end() } );
-}
-
-void xui::context::pop_style_type()
-{
-    _p->_types.pop_back();
-}
-
-void xui::context::push_style_element( std::string_view element )
-{
-    _p->_types.push_back( std::format( "{}-{}", _p->_types.back(), element ) );
-}
-
-void xui::context::pop_style_element()
-{
-    _p->_types.pop_back();
-}
-
-void xui::context::push_style_action( std::string_view action )
-{
-    _p->_types.push_back( std::format( "{}:{}", _p->_types.back(), action ) );
-}
-
-void xui::context::pop_style_action()
-{
-    _p->_types.pop_back();
-}
-
 xui::drawcmd::text_element & xui::context::draw_text( std::string_view text, xui::font_id id, const xui::rect & rect, const xui::color & font_color, xui::alignment_flag text_align )
 {
     xui::drawcmd::text_element element;
@@ -2307,52 +2395,45 @@ xui::drawcmd::text_element & xui::context::draw_text( std::string_view text, xui
     element.color = font_color;// current_style( "font-color" ).value<xui::color>();
     element.align = text_align;// current_style( "text-align" ).value<xui::alignment_flag>( xui::alignment_flag::ALIGN_CENTER );
 
-    _p->_commands.push_back( { current_window(), element } );
+    _p->_commands.push_back( { current_window_id(), element } );
 
     return std::get<xui::drawcmd::text_element>( _p->_commands.back().element );
 }
 
-xui::drawcmd::line_element & xui::context::draw_line( const xui::vec2 & p1, const xui::vec2 & p2, uint32_t stroke_style, float stroke_width, const xui::color & stroke_color )
+xui::drawcmd::line_element & xui::context::draw_line( const xui::vec2 & p1, const xui::vec2 & p2, const xui::stroke & stroke )
 {
     xui::drawcmd::line_element element;
 
     element.p1 = p1;
     element.p2 = p2;
-    element.stroke.style = stroke_style;// current_style( "stroke-style" ).value<uint32_t>( xui::drawcmd::stroke::SOLID );
-    element.stroke.width = stroke_width;// current_style( "stroke-width" ).value<float>( 1.0f )
-    element.stroke.color = stroke_color;// current_style( "stroke-color" ).value<xui::color>();
+    element.stroke = stroke;
 
-    _p->_commands.push_back( { current_window(), element } );
+    _p->_commands.push_back( { current_window_id(), element } );
 
     return std::get<xui::drawcmd::line_element>( _p->_commands.back().element );
 }
 
-xui::drawcmd::rect_element & xui::context::draw_rect( const xui::rect & rect, uint32_t border_style, float border_width, const xui::color & border_color, const xui::vec4 & border_radius, const xui::color & background_color )
+xui::drawcmd::rect_element & xui::context::draw_rect( const xui::rect & rect, const xui::border & border, const xui::filled filled )
 {
     xui::drawcmd::rect_element element;
 
     element.rect = rect;
-    element.border.style = border_style;// current_style( "border-style" ).value<uint32_t>( xui::drawcmd::stroke::SOLID );
-    element.border.width = border_width;// current_style( "border-width" ).value<float>( 1.0f );
-    element.border.color = border_color;// current_style( "border-color" ).value<xui::color>();
-    element.border.radius = border_radius;// current_style( "border-radius" ).value<xui::vec4>();
-    element.filled.color = background_color;// current_style( "background-color" ).value<xui::color>();
+    element.border = border;
+    element.filled = filled;
 
-    _p->_commands.push_back( { current_window(), element } );
+    _p->_commands.push_back( { current_window_id(), element } );
 
     return std::get<xui::drawcmd::rect_element>( _p->_commands.back().element );
 }
 
-xui::drawcmd::path_element & xui::context::draw_path( uint32_t stroke_style, float stroke_width, const xui::color & stroke_color, const xui::color & background_color )
+xui::drawcmd::path_element & xui::context::draw_path( const xui::stroke & stroke, const xui::filled filled )
 {
     xui::drawcmd::path_element element;
 
-    element.stroke.style = stroke_style;// current_style( "stroke-style" ).value<uint32_t>( xui::drawcmd::stroke::SOLID );
-    element.stroke.width = stroke_width;// current_style( "stroke-width" ).value<float>( 1.0f );
-    element.stroke.color = stroke_color;// current_style( "stroke-color" ).value<xui::color>();
-    element.filled.color = background_color;// current_style( "background-color" ).value<xui::color>();
+    element.stroke = stroke;
+    element.filled = filled;
 
-    _p->_commands.push_back( { current_window(), element } );
+    _p->_commands.push_back( { current_window_id(), element } );
 
     return std::get<xui::drawcmd::path_element>( _p->_commands.back().element );
 }
@@ -2364,57 +2445,114 @@ xui::drawcmd::image_element & xui::context::draw_image( xui::texture_id id, cons
     element.id = id;
     element.rect = rect;
 
-    _p->_commands.push_back( { current_window(), element } );
+    _p->_commands.push_back( { current_window_id(), element } );
 
     return std::get<xui::drawcmd::image_element>( _p->_commands.back().element );
 }
 
-xui::drawcmd::circle_element & xui::context::draw_circle( const xui::vec2 & center, float radius, uint32_t border_style, float border_width, const xui::color & border_color, const xui::vec4 & border_radius, const xui::color & background_color )
+xui::drawcmd::circle_element & xui::context::draw_circle( const xui::vec2 & center, float radius, const xui::border & border, const xui::filled filled )
 {
     xui::drawcmd::circle_element element;
 
     element.center = center;
     element.radius = radius;
-    element.border.style = border_style;// current_style( "border-style" ).value<uint32_t>( xui::drawcmd::stroke::SOLID );
-    element.border.width = border_width;// current_style( "border-width" ).value<float>( 1.0f );
-    element.border.color = border_color;// current_style( "border-color" ).value<xui::color>();
-    element.border.radius = border_radius;// current_style( "border-radius" ).value<xui::vec4>();
-    element.filled.color = background_color;// current_style( "background-color" ).value<xui::color>();
+    element.border = border;
+    element.filled = filled;
 
-    _p->_commands.push_back( { current_window(), element } );
+    _p->_commands.push_back( { current_window_id(), element } );
 
     return std::get<xui::drawcmd::circle_element>( _p->_commands.back().element );
 }
 
-xui::drawcmd::ellipse_element & xui::context::draw_ellipse( const xui::vec2 & center, const xui::vec2 & radius, uint32_t border_style, float border_width, const xui::color & border_color, const xui::vec4 & border_radius, const xui::color & background_color )
+xui::drawcmd::ellipse_element & xui::context::draw_ellipse( const xui::vec2 & center, const xui::vec2 & radius, const xui::border & border, const xui::filled filled )
 {
     xui::drawcmd::ellipse_element element;
 
     element.center = center;
     element.radius = radius;
-    element.border.style = border_style;// current_style( "border-style" ).value<uint32_t>( xui::drawcmd::stroke::SOLID );
-    element.border.width = border_width;// current_style( "border-width" ).value<float>( 1.0f );
-    element.border.color = border_color;// current_style( "border-color" ).value<xui::color>();
-    element.border.radius = border_radius;// current_style( "border-radius" ).value<xui::vec4>();
-    element.filled.color = background_color;// current_style( "background-color" ).value<xui::color>();
+    element.border = border;
+    element.filled = filled;
 
-    _p->_commands.push_back( { current_window(), element } );
+    _p->_commands.push_back( { current_window_id(), element } );
 
     return std::get<xui::drawcmd::ellipse_element>( _p->_commands.back().element );
 }
 
-xui::drawcmd::polygon_element & xui::context::draw_polygon( std::span<xui::vec2> points, uint32_t border_style, float border_width, const xui::color & border_color, const xui::vec4 & border_radius, const xui::color & background_color )
+xui::drawcmd::polygon_element & xui::context::draw_polygon( std::span<xui::vec2> points, const xui::border & border, const xui::filled filled )
 {
     xui::drawcmd::polygon_element element;
 
     element.points.assign( points.begin(), points.end() );
-    element.border.style = border_style;// current_style( "border-style" ).value<uint32_t>( xui::drawcmd::stroke::SOLID );
-    element.border.width = border_width;// current_style( "border-width" ).value<float>( 1.0f );
-    element.border.color = border_color;// current_style( "border-color" ).value<xui::color>();
-    element.border.radius = border_radius;// current_style( "border-radius" ).value<xui::vec4>();
-    element.filled.color = background_color;// current_style( "background-color" ).value<xui::color>();
+    element.border = border;
+    element.filled = filled;
 
-    _p->_commands.push_back( { current_window(), element } );
+    _p->_commands.push_back( { current_window_id(), element } );
 
     return std::get<xui::drawcmd::polygon_element>( _p->_commands.back().element );
+}
+
+std::string xui::context::style_name() const
+{
+    std::string result( _p->_types.back().type.begin(), _p->_types.back().type.end() );
+
+    for ( const auto & it : _p->_types.back().elements )
+    {
+        result += "-";
+        result += it;
+    }
+
+    if ( !_p->_types.back().actions.empty() )
+    {
+        result += ":" + _p->_types.back().actions.back();
+    }
+
+    if ( !_p->_strids.empty() )
+    {
+        result.append( "#" );
+        result.append( _p->_strids.back() );
+    }
+
+    return result;
+}
+
+std::string xui::context::focus_name() const
+{
+    std::string result( _p->_types.back().type.begin(), _p->_types.back().type.end() );
+
+    for ( const auto & it : _p->_types.back().elements )
+    {
+        result += "-";
+        result += it;
+    }
+
+    if ( !_p->_strids.empty() )
+    {
+        result.append( "#" );
+        result.append( _p->_strids.back() );
+    }
+
+    return result;
+}
+
+void xui::context::push_focus( xui::event event )
+{
+    focus_type type;
+    type.id = current_window_id();
+    type.name = focus_name();
+    type.event = event;
+    _p->_focus.push_back( type );
+}
+
+void xui::context::pop_focus()
+{
+    if ( !_p->_focus.empty() )
+        _p->_focus.pop_back();
+}
+
+bool xui::context::current_focus() const
+{
+    if ( _p->_focus.empty() )
+        return false;
+
+    return _p->_focus.back().name == focus_name();
 }
