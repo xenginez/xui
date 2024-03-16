@@ -56,21 +56,22 @@ public:
 	void remove_texture( xui::texture_id id ) override;
 
 public:
+	xui::vec2 get_wheel( xui::window_id id ) const override;
 	xui::vec2 get_cursor( xui::window_id id ) const override;
 	std::string get_unicodes( xui::window_id id ) const override;
-	int get_event( xui::window_id id, xui::event key, xui::action act = xui::action::PRESS ) const override;
+	int get_event( xui::window_id id, xui::event key ) const override;
 	std::span<xui::vec2> get_touchs( xui::window_id id ) const override;
 	std::string get_clipboard_data( xui::window_id id, std::string_view mime ) const override;
 	bool set_clipboard_data( xui::window_id id, std::string_view mime, std::string_view data ) override;
 
 private:
-	void set_event( xui::window_id id, xui::event key, xui::action act );
 	void present();
 	void render( std::span<xui::drawcmd> cmds );
 
 private:
 	std::shared_ptr<Gdiplus::Pen> create_pen( const xui::stroke & stroke ) const;
 	std::shared_ptr<Gdiplus::Brush> create_brush( const xui::filled & filled ) const;
+	void set_event( xui::window_id id, xui::event key, int val, xui::action act = xui::action::PRESS );
 
 private:
 	private_p * _p;

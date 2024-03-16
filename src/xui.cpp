@@ -1088,6 +1088,7 @@ public:
     private_p( std::pmr::memory_resource * res )
         : _res( res )
         , _commands( res )
+        , _disables( res )
         , _rects( res )
         , _types( res )
         , _focus( res )
@@ -1110,6 +1111,7 @@ public:
 
 public:
     int _str_id = 0;
+    std::pmr::deque<bool> _disables;
     std::pmr::deque<xui::rect> _rects;
     std::pmr::deque<style_type> _types;
     std::pmr::deque<focus_type> _focus;
@@ -1452,6 +1454,24 @@ xui::rect xui::context::currrent_rect() const
     return _p->_rects.back();
 }
 
+void xui::context::push_disable( bool val )
+{
+    _p->_disables.push_back( val );
+}
+
+void xui::context::pop_disable()
+{
+    _p->_disables.pop_back();
+}
+
+bool xui::context::current_disable() const
+{
+    if ( _p->_disables.empty() )
+        return false;
+
+    return _p->_disables.back();
+}
+
 void xui::context::push_string_id( xui::string_id id )
 {
     _p->_strids.push_back( id );
@@ -1573,11 +1593,11 @@ bool xui::context::begin_window( xui::string_id str_id, std::string_view title, 
             xui::rect title_rect = { 0, 0, wrect.w, 30 };
             xui::rect resize_rect = { wrect.x + ( wrect.w - 30 ), wrect.y + ( wrect.h - 30 ), 30, 30 };
 
-            if ( ( flags & xui::window_flag::WINDOW_NO_MOVE ) != 0 && _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && title_rect.contains( cursorpos ) )
+            if ( ( flags & xui::window_flag::WINDOW_NO_MOVE ) != 0 )
             {
 
             }
-            if ( ( flags & xui::window_flag::WINDOW_NO_RESIZE ) != 0 && _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && resize_rect.contains( cursorpos ) )
+            if ( ( flags & xui::window_flag::WINDOW_NO_RESIZE ) != 0 )
             {
 
             }
@@ -1610,11 +1630,11 @@ bool xui::context::begin_window( xui::string_id str_id, std::string_view title, 
 
                         if ( ( ( flags & xui::window_flag::WINDOW_NO_CLOSEBOX ) == 0 ) && _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && box_rect.contains( cursorpos ) )
                             _p->_impl->remove_window( id );
-                        else if ( ( ( flags & xui::window_flag::WINDOW_NO_CLOSEBOX ) == 0 ) && _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && box_rect.contains( cursorpos ) )
+                        else if ( ( ( flags & xui::window_flag::WINDOW_NO_CLOSEBOX ) == 0 ) && _p->_impl->get_event( id, xui::event::MOUSE_ACTIVE ) && box_rect.contains( cursorpos ) )
                             draw_style_action( "hover", [&]()
-                        {
-                            draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-                        } );
+                            {
+                                draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                            } );
                         else
                             draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
@@ -1635,11 +1655,11 @@ bool xui::context::begin_window( xui::string_id str_id, std::string_view title, 
 
                         if ( ( ( flags & xui::window_flag::WINDOW_NO_MAXIMIZEBOX ) == 0 ) && _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && box_rect.contains( cursorpos ) )
                             _p->_impl->set_window_status( id, ( ( status & xui::window_status::WINDOW_MAXIMIZE ) != 0 ) ? xui::window_status::WINDOW_RESTORE : xui::window_status::WINDOW_MAXIMIZE );
-                        else if ( ( ( flags & xui::window_flag::WINDOW_NO_MAXIMIZEBOX ) == 0 ) && _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && box_rect.contains( cursorpos ) )
+                        else if ( ( ( flags & xui::window_flag::WINDOW_NO_MAXIMIZEBOX ) == 0 ) && _p->_impl->get_event( id, xui::event::MOUSE_ACTIVE ) && box_rect.contains( cursorpos ) )
                             draw_style_action( "hover", [&]()
-                        {
-                            draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-                        } );
+                            {
+                                draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                            } );
                         else
                             draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
@@ -1681,11 +1701,11 @@ bool xui::context::begin_window( xui::string_id str_id, std::string_view title, 
 
                         if ( ( ( flags & xui::window_flag::WINDOW_NO_MINIMIZEBOX ) == 0 ) && _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && box_rect.contains( cursorpos ) )
                             _p->_impl->set_window_status( id, xui::window_status::WINDOW_MINIMIZE );
-                        else if ( ( ( flags & xui::window_flag::WINDOW_NO_MINIMIZEBOX ) == 0 ) && _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && box_rect.contains( cursorpos ) )
+                        else if ( ( ( flags & xui::window_flag::WINDOW_NO_MINIMIZEBOX ) == 0 ) && _p->_impl->get_event( id, xui::event::MOUSE_ACTIVE ) && box_rect.contains( cursorpos ) )
                             draw_style_action( "hover", [&]()
-                        {
-                            draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-                        } );
+                            {
+                                draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                            } );
                         else
                             draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
@@ -1769,20 +1789,12 @@ bool xui::context::radio( xui::string_id str_id, bool & checked )
     auto id = current_window_id();
     auto rect = currrent_rect();
     float raduis = std::min( rect.w, rect.h ) / 2;
-    std::string_view action;
 
     draw_style_type( "radio", [&]()
     {
-        if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && rect.contains( _p->_impl->get_cursor( id ) ) )
-        {
+        std::string_view action = get_action_name();
+        if ( action == "active" )
             checked = !checked;
-
-            action = "active";
-        }
-        else if ( _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && rect.contains( _p->_impl->get_cursor( id ) ) )
-        {
-            action = "hover";
-        }
 
         draw_style_action( action, [&]()
         {
@@ -1819,20 +1831,10 @@ bool xui::context::check( xui::string_id str_id, bool & checked )
     rect.w = std::min( rect.w, rect.h );
     rect.h = rect.w;
 
-    std::string_view action;
-
     draw_style_type( "check", [&]()
     {
-        if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && rect.contains( _p->_impl->get_cursor( id ) ) )
-        {
-            checked = !checked;
-
-            action = "active";
-        }
-        else if ( _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && rect.contains( _p->_impl->get_cursor( id ) ) )
-        {
-            action = "hover";
-        }
+        std::string_view action = get_action_name();
+        if ( action == "active" ) checked = !checked;
 
         draw_style_action( action, [&]()
         {
@@ -1869,43 +1871,30 @@ bool xui::context::button( xui::string_id str_id, std::string_view text )
 
     auto id = current_window_id();
     auto rect = currrent_rect();
-
     std::string_view action;
+
     draw_style_type( "button", [&]()
     {
-        if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && rect.contains( _p->_impl->get_cursor( id ) ) )
-            action = "active";
-        else if ( _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && rect.contains( _p->_impl->get_cursor( id ) ) )
-            action = "hover";
-        else
-            action = "";
+        action = get_action_name();
 
         draw_style_action( action, [&]()
         {
             draw_rect( rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
         } );
 
-        draw_style_element( "text", [&]()
+        if ( !text.empty() )
         {
-            if ( !text.empty() )
+            draw_style_element( "text", [&]()
             {
-                std::string_view action;
-                if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && rect.contains( _p->_impl->get_cursor( id ) ) )
-                    action = "active";
-                else if ( _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && rect.contains( _p->_impl->get_cursor( id ) ) )
-                    action = "hover";
-                else
-                    action = "";
-
                 draw_style_action( action, [&]()
                 {
                     draw_text( text, current_font(), rect, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
                 } );
-            }
-        } );
+            } );
+        }
     } );
 
-    return ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && rect.contains( _p->_impl->get_cursor( id ) ) );
+    return action == "active";
 }
 
 float xui::context::slider( float & value, float min, float max )
@@ -1919,16 +1908,12 @@ float xui::context::slider( xui::string_id str_id, float & value, float min, flo
     push_string_id( str_id );
 
     auto id = current_window_id();
-    std::string_view action;
 
     draw_style_type( "slider", [&]()
     {
         auto back_rect = currrent_rect();
         xui::vec2 pos = _p->_impl->get_cursor( id );
-        if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && back_rect.contains( pos ) )
-            action = "active";
-        else if ( _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && back_rect.contains( pos ) )
-            action = "hover";
+        std::string_view action = get_action_name( true );
 
         draw_style_action( action, [&]()
         {
@@ -2103,14 +2088,7 @@ float xui::context::scrollbar( xui::string_id str_id, float & value, float step,
         xui::vec2 pos = _p->_impl->get_cursor( id );
         float arrow_radius = std::min( back_rect.w, back_rect.h );
 
-        if( current_focus() )
-            action = "active";
-        else if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && back_rect.contains( pos ) )
-            action = "active";
-        else if ( _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && back_rect.contains( pos ) )
-            action = "hover";
-        else
-            action = "";
+        action = get_action_name();
 
         draw_style_action( action, [&]()
         {
@@ -2132,35 +2110,16 @@ float xui::context::scrollbar( xui::string_id str_id, float & value, float step,
             case xui::direction::LEFT_RIGHT:
             case xui::direction::RIGHT_LEFT:
                 detect_rect = { back_rect.x + arrow_radius,  back_rect.y, back_rect.w - arrow_radius * 2, back_rect.h };
-
-                if ( current_focus() )
-                    action = "active";
-                else if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && detect_rect.contains( pos ) )
-                {
-                    action = "active";
-                    push_focus( xui::event::KEY_MOUSE_LEFT );
-                }
-                else if ( _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && detect_rect.contains( pos ) )
-                    action = "hover";
-                else
-                    action = "";
+                push_rect( detect_rect );
+                action = get_action_name();
+                pop_rect();
                 break;
             case xui::direction::TOP_BOTTOM:
             case xui::direction::BOTTOM_TOP:
                 detect_rect = { back_rect.x,  back_rect.y + arrow_radius, back_rect.w, back_rect.h - arrow_radius * 2 };
-
-                if ( current_focus() )
-                    action = "active";
-                else if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && detect_rect.contains( pos ) )
-                {
-                    action = "active";
-                    push_focus( xui::event::KEY_MOUSE_LEFT );
-                }
-                else if ( _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && detect_rect.contains( pos ) )
-                    action = "hover";
-                else
-                    action = "";
-                break;
+                push_rect( detect_rect );
+                action = get_action_name();
+                pop_rect();
                 break;
             default:
                 break;
@@ -2277,13 +2236,9 @@ float xui::context::scrollbar( xui::string_id str_id, float & value, float step,
             case xui::direction::RIGHT_LEFT:
                 // left
                 arrow_rect = { back_rect.x, back_rect.y, arrow_radius, arrow_radius };
+                draw_rect( arrow_rect, [&]()
                 {
-                    if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && arrow_rect.contains( pos ) )
-                        action = "active";
-                    else if ( _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && arrow_rect.contains( pos ) )
-                        action = "hover";
-                    else
-                        action = "";
+                    action = get_action_name();
 
                     if ( action == "active" )
                         value = std::clamp( value + ( dir == xui::direction::LEFT_RIGHT ? -step : step ), min, max );
@@ -2298,17 +2253,13 @@ float xui::context::scrollbar( xui::string_id str_id, float & value, float step,
                             .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.7f } )
                             .closepath();
                     } );
-                }
+                } );
 
                 // right
                 arrow_rect = { back_rect.x + back_rect.w - arrow_radius, back_rect.y, arrow_radius, arrow_radius };
+                draw_rect( arrow_rect, [&]()
                 {
-                    if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && arrow_rect.contains( pos ) )
-                        action = "active";
-                    else if ( _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && arrow_rect.contains( pos ) )
-                        action = "hover";
-                    else
-                        action = "";
+                    action = get_action_name();
 
                     if ( action == "active" )
                         value = std::clamp( value + ( dir == xui::direction::RIGHT_LEFT ? -step : step ), min, max );
@@ -2323,19 +2274,15 @@ float xui::context::scrollbar( xui::string_id str_id, float & value, float step,
                             .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.7f } )
                             .closepath();
                     } );
-                }
+                } );
                 break;
             case xui::direction::TOP_BOTTOM:
             case xui::direction::BOTTOM_TOP:
                 // up
                 arrow_rect = { back_rect.x, back_rect.y, arrow_radius, arrow_radius };
+                draw_rect( arrow_rect, [&]()
                 {
-                    if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && arrow_rect.contains( pos ) )
-                        action = "active";
-                    else if ( _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && arrow_rect.contains( pos ) )
-                        action = "hover";
-                    else
-                        action = "";
+                    action = get_action_name();
 
                     if ( action == "active" )
                         value = std::clamp( value + ( dir == xui::direction::TOP_BOTTOM ? -step : step ), min, max );
@@ -2350,17 +2297,13 @@ float xui::context::scrollbar( xui::string_id str_id, float & value, float step,
                             .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.7f } )
                             .closepath();
                     } );
-                }
+                } );
 
                 // down
                 arrow_rect = { back_rect.x, back_rect.y + back_rect.h - arrow_radius, arrow_radius, arrow_radius };
+                draw_rect( arrow_rect, [&]()
                 {
-                    if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && arrow_rect.contains( pos ) )
-                        action = "active";
-                    else if ( _p->_impl->get_event( id, xui::event::MOUSE_ENTER ) && arrow_rect.contains( pos ) )
-                        action = "hover";
-                    else
-                        action = "";
+                    action = get_action_name();
 
                     if ( action == "active" )
                         value = std::clamp( value + ( dir == xui::direction::BOTTOM_TOP ? -step : step ), min, max );
@@ -2375,7 +2318,7 @@ float xui::context::scrollbar( xui::string_id str_id, float & value, float step,
                             .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.3f } )
                             .closepath();
                     } );
-                }
+                } );
                 break;
             }
         } );
@@ -2392,8 +2335,8 @@ xui::drawcmd::text_element & xui::context::draw_text( std::string_view text, xui
     element.font = id;
     element.text = text;
     element.rect = rect;
-    element.color = font_color;// current_style( "font-color" ).value<xui::color>();
-    element.align = text_align;// current_style( "text-align" ).value<xui::alignment_flag>( xui::alignment_flag::ALIGN_CENTER );
+    element.color = font_color;
+    element.align = text_align;
 
     _p->_commands.push_back( { current_window_id(), element } );
 
@@ -2555,4 +2498,35 @@ bool xui::context::current_focus() const
         return false;
 
     return _p->_focus.back().name == focus_name();
+}
+
+std::string_view xui::context::get_action_name( bool focus )
+{
+    auto id = current_window_id();
+    auto rect = currrent_rect();
+    auto pos = _p->_impl->get_cursor( id );
+
+    if ( current_disable() )
+    {
+        return "disable";
+    }
+    else if ( focus && current_focus() )
+    {
+        return "active";
+    }
+    else if( _p->_focus.empty() )
+    {
+        if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && rect.contains( pos ) )
+        {
+            push_focus( xui::event::KEY_MOUSE_LEFT );
+
+            return "active";
+        }
+        else if ( _p->_impl->get_event( id, xui::event::MOUSE_ACTIVE ) && rect.contains( pos ) )
+        {
+            return "hover";
+        }
+    }
+
+    return "";
 }

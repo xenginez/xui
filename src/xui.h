@@ -33,6 +33,36 @@ namespace xui
 	struct overload : Ts ... { using Ts::operator() ...; };
 	template<class... Ts> overload( Ts... ) -> overload<Ts...>;
 
+	inline constexpr size_t hash( const char * str, size_t value = 14695981039346656037ULL )
+	{
+		return *str != 0 ? hash( ++str, ( value ^ static_cast<size_t>( *str ) ) * 1099511628211ULL ) : value;
+	}
+	inline constexpr size_t hash( const wchar_t * str, size_t value = 14695981039346656037ULL )
+	{
+		return *str != 0 ? hash( ++str, ( value ^ static_cast<size_t>( *str ) ) * 1099511628211ULL ) : value;
+	}
+	inline constexpr size_t hash( const char8_t * str, size_t value = 14695981039346656037ULL )
+	{
+		return *str != 0 ? hash( ++str, ( value ^ static_cast<size_t>( *str ) ) * 1099511628211ULL ) : value;
+	}
+	inline constexpr size_t hash( const char16_t * str, size_t value = 14695981039346656037ULL )
+	{
+		return *str != 0 ? hash( ++str, ( value ^ static_cast<size_t>( *str ) ) * 1099511628211ULL ) : value;
+	}
+	inline constexpr size_t hash( const char32_t * str, size_t value = 14695981039346656037ULL )
+	{
+		return *str != 0 ? hash( ++str, ( value ^ static_cast<size_t>( *str ) ) * 1099511628211ULL ) : value;
+	}
+	template< typename ... Types > inline constexpr size_t hash( std::basic_string_view< Types... > str, size_t value = 14695981039346656037ULL ) noexcept
+	{
+		return xui::hash( str.data(), value );
+	}
+	template< typename ... Types > inline constexpr size_t hash( const std::basic_string< Types... > & str, size_t value = 14695981039346656037ULL ) noexcept
+	{
+		return xui::hash( str.c_str(), value );
+	}
+
+
 	enum err
 	{
 		ERR_NO = 0,
@@ -40,7 +70,7 @@ namespace xui
 	enum event
 	{
 		// KeyBoard Events
-		KEY_EVENT_BEG = 0,
+		KEY_EVENT_BEG,
 		KEY_TAB = KEY_EVENT_BEG,
 		KEY_LEFT_ARROW,
 		KEY_RIGHT_ARROW,
@@ -97,8 +127,8 @@ namespace xui
 		KEY_EVENT_END = KEY_APP_FORWARD,
 
 		// Gamepad Events
-		GAMEPAD_EVENT_BEG = KEY_EVENT_END,
-		GAMEPAD_START,				// Menu (Xbox)      + (Switch)   Start/Options (PS)
+		GAMEPAD_EVENT_BEG,
+		GAMEPAD_START = GAMEPAD_EVENT_BEG,				// Menu (Xbox)      + (Switch)   Start/Options (PS)
 		GAMEPAD_BACK,				// View (Xbox)      - (Switch)   Share (PS)
 		GAMEPAD_FACE_LEFT,			// X (Xbox)         Y (Switch)   Square (PS)        // Tap: Toggle Menu. Hold: Windowing mode (Focus/Move/Resize windows)
 		GAMEPAD_FACE_RIGHT,			// B (Xbox)         A (Switch)   Circle (PS)        // Cancel / Close / Exit
@@ -125,10 +155,10 @@ namespace xui
 		GAMEPAD_EVENT_END = GAMEPAD_R_STICK_DOWN,
 
 		// Mouse Events
-		MOUSE_EVENT_BEG = GAMEPAD_EVENT_END,
+		MOUSE_EVENT_BEG,
+		MOUSE_ACTIVE = MOUSE_EVENT_BEG,
 		KEY_MOUSE_LEFT, KEY_MOUSE_RIGHT, KEY_MOUSE_MIDDLE, KEY_MOUSE_X1, KEY_MOUSE_X2,
-		MOUSE_ENTER, MOUSE_LEAVE, MOUSE_MOVE, MOUSE_WHEEL,
-		MOUSE_EVENT_END = MOUSE_WHEEL,
+		MOUSE_EVENT_END = KEY_MOUSE_X2,
 
 		EVENT_MAX_COUNT,
 	};
@@ -719,6 +749,10 @@ namespace xui
 		void pop_rect();
 		xui::rect currrent_rect() const;
 
+		void push_disable( bool val );
+		void pop_disable();
+		bool current_disable() const;
+
 		void push_string_id( xui::string_id id );
 		void pop_string_id();
 		xui::string_id current_string_id() const;
@@ -767,6 +801,12 @@ namespace xui
 			push_rect( rect );
 			f();
 			pop_rect();
+		}
+		template<typename F> void draw_disable( bool val, F && f )
+		{
+			push_disable( val );
+			f();
+			pop_disable();
 		}
 		template<typename F> void draw_string_id( xui::string_id str_id, F && f )
 		{
@@ -881,6 +921,7 @@ namespace xui
 		void push_focus( xui::event event );
 		void pop_focus();
 		bool current_focus() const;
+		std::string_view get_action_name( bool focus = false );
 
 	private:
 		private_p * _p;
@@ -922,9 +963,10 @@ namespace xui
 		virtual void remove_texture( xui::texture_id id ) = 0;
 
 	public:
+		virtual xui::vec2 get_wheel( xui::window_id id ) const = 0;
 		virtual xui::vec2 get_cursor( xui::window_id id ) const = 0;
 		virtual std::string get_unicodes( xui::window_id id ) const = 0;
-		virtual int get_event( xui::window_id id, xui::event key, xui::action act = xui::action::PRESS ) const = 0;
+		virtual int get_event( xui::window_id id, xui::event key ) const = 0;
 		virtual std::span<xui::vec2> get_touchs( xui::window_id id ) const = 0;
 		virtual std::string get_clipboard_data( xui::window_id id, std::string_view mime ) const = 0;
 		virtual bool set_clipboard_data( xui::window_id id, std::string_view mime, std::string_view data ) = 0;
@@ -1023,5 +1065,10 @@ namespace xui
 	inline bool			operator!=( const xui::rect & lhs, const xui::rect & rhs )
 	{
 		return lhs.x != rhs.x || lhs.y != rhs.y || lhs.w != rhs.w || lhs.h != rhs.h;
+	}
+
+	constexpr size_t operator "" _hash( const char * str )
+	{
+		return xui::hash( str );
 	}
 }
