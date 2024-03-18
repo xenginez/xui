@@ -56,8 +56,9 @@ public:
 	void remove_texture( xui::texture_id id ) override;
 
 public:
-	xui::vec2 get_wheel( xui::window_id id ) const override;
-	xui::vec2 get_cursor( xui::window_id id ) const override;
+	xui::vec2 get_cursor_dt( xui::window_id id ) const override;
+	xui::vec2 get_cursor_pos( xui::window_id id ) const override;
+	xui::vec2 get_cusor_wheel( xui::window_id id ) const override;
 	std::string get_unicodes( xui::window_id id ) const override;
 	int get_event( xui::window_id id, xui::event key ) const override;
 	std::span<xui::vec2> get_touchs( xui::window_id id ) const override;
@@ -71,6 +72,12 @@ private:
 private:
 	std::shared_ptr<Gdiplus::Pen> create_pen( const xui::stroke & stroke ) const;
 	std::shared_ptr<Gdiplus::Brush> create_brush( const xui::filled & filled ) const;
+
+private:
+	void set_unicode( xui::window_id id, wchar_t unicode );
+	void set_wheel( xui::window_id id, const xui::vec2 & dt );
+	void set_cursor( xui::window_id id, const xui::vec2 & pos );
+	void set_touchs( xui::window_id id, std::span<xui::vec2> touchs );
 	void set_event( xui::window_id id, xui::event key, int val, xui::action act = xui::action::PRESS );
 
 private:

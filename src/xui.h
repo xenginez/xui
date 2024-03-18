@@ -5,6 +5,7 @@
 #include <format>
 #include <string>
 #include <variant>
+#include <optional>
 #include <functional>
 #include <system_error>
 #include <memory_resource>
@@ -32,36 +33,6 @@ namespace xui
 	template<typename ... Ts>
 	struct overload : Ts ... { using Ts::operator() ...; };
 	template<class... Ts> overload( Ts... ) -> overload<Ts...>;
-
-	inline constexpr size_t hash( const char * str, size_t value = 14695981039346656037ULL )
-	{
-		return *str != 0 ? hash( ++str, ( value ^ static_cast<size_t>( *str ) ) * 1099511628211ULL ) : value;
-	}
-	inline constexpr size_t hash( const wchar_t * str, size_t value = 14695981039346656037ULL )
-	{
-		return *str != 0 ? hash( ++str, ( value ^ static_cast<size_t>( *str ) ) * 1099511628211ULL ) : value;
-	}
-	inline constexpr size_t hash( const char8_t * str, size_t value = 14695981039346656037ULL )
-	{
-		return *str != 0 ? hash( ++str, ( value ^ static_cast<size_t>( *str ) ) * 1099511628211ULL ) : value;
-	}
-	inline constexpr size_t hash( const char16_t * str, size_t value = 14695981039346656037ULL )
-	{
-		return *str != 0 ? hash( ++str, ( value ^ static_cast<size_t>( *str ) ) * 1099511628211ULL ) : value;
-	}
-	inline constexpr size_t hash( const char32_t * str, size_t value = 14695981039346656037ULL )
-	{
-		return *str != 0 ? hash( ++str, ( value ^ static_cast<size_t>( *str ) ) * 1099511628211ULL ) : value;
-	}
-	template< typename ... Types > inline constexpr size_t hash( std::basic_string_view< Types... > str, size_t value = 14695981039346656037ULL ) noexcept
-	{
-		return xui::hash( str.data(), value );
-	}
-	template< typename ... Types > inline constexpr size_t hash( const std::basic_string< Types... > & str, size_t value = 14695981039346656037ULL ) noexcept
-	{
-		return xui::hash( str.c_str(), value );
-	}
-
 
 	enum err
 	{
@@ -456,7 +427,8 @@ namespace xui
 	class style
 	{
 	private:
-		using variant_type = std::variant<std::monostate, int, float, uint32_t, std::string, xui::color, xui::vec2, xui::vec4, xui::url, xui::hatch_color, xui::texture_brush, xui::linear_gradient, xui::stroke, xui::border, xui::filled>;
+		struct inherit { };
+		using variant_type = std::variant<std::monostate, int, float, uint32_t, std::string, xui::color, xui::vec2, xui::vec4, xui::url, xui::hatch_color, xui::texture_brush, xui::linear_gradient, xui::stroke, xui::border, xui::filled, inherit>;
 
 	public:
 		struct variant : public variant_type
@@ -480,6 +452,7 @@ namespace xui
 			static constexpr const std::size_t stroke_idx = 12;
 			static constexpr const std::size_t border_idx = 13;
 			static constexpr const std::size_t filled_idx = 14;
+			static constexpr const std::size_t inherit_idx = 15;
 
 		public:
 			template<typename T> T value( const T & def = {} ) const
@@ -543,7 +516,7 @@ namespace xui
 
 	public:
 		bool parse( std::string_view str );
-		variant find( std::string_view name ) const;
+		xui::style::variant find( std::string_view name ) const;
 		template<typename T, typename Container> void get_values( Container & _c ) const
 		{
 			for ( const auto & it : _selectors )
@@ -563,8 +536,11 @@ namespace xui
 		}
 
 	private:
-		static selector parse_selector( std::string_view::iterator & beg, std::string_view::iterator end );
-		static variant parse_attribute( std::string_view::iterator & beg, std::string_view::iterator end );
+		std::optional<xui::style::variant> find( std::string_view type, std::string_view attr ) const;
+
+	private:
+		static xui::style::selector parse_selector( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::style::variant parse_attribute( std::string_view::iterator & beg, std::string_view::iterator end );
 		static xui::color parse_light( std::string_view::iterator & beg, std::string_view::iterator end );
 		static xui::color parse_dark( std::string_view::iterator & beg, std::string_view::iterator end );
 		static xui::color parse_rgba( std::string_view::iterator & beg, std::string_view::iterator end );
@@ -855,9 +831,9 @@ namespace xui
 		float scrollbar( xui::string_id str_id, float & value, float step, float min, float max, xui::direction dir = xui::direction::TOP_BOTTOM );
 
 	public:
-		bool begin_menubar();
-		bool begin_menu();
-		bool menu_item();
+		bool begin_menubar( xui::string_id str_id = "" );
+		bool begin_menu( std::string_view name );
+		bool menu_item( std::string_view name );
 		bool menu_separator();
 		void end_menu();
 		void end_menubar();
@@ -921,6 +897,7 @@ namespace xui
 		void push_focus( xui::event event );
 		void pop_focus();
 		bool current_focus() const;
+		bool inherit_focus() const;
 		std::string_view get_action_name( bool focus = false );
 
 	private:
@@ -963,8 +940,9 @@ namespace xui
 		virtual void remove_texture( xui::texture_id id ) = 0;
 
 	public:
-		virtual xui::vec2 get_wheel( xui::window_id id ) const = 0;
-		virtual xui::vec2 get_cursor( xui::window_id id ) const = 0;
+		virtual xui::vec2 get_cursor_dt( xui::window_id id ) const = 0;
+		virtual xui::vec2 get_cursor_pos( xui::window_id id ) const = 0;
+		virtual xui::vec2 get_cusor_wheel( xui::window_id id ) const = 0;
 		virtual std::string get_unicodes( xui::window_id id ) const = 0;
 		virtual int get_event( xui::window_id id, xui::event key ) const = 0;
 		virtual std::span<xui::vec2> get_touchs( xui::window_id id ) const = 0;
@@ -1065,10 +1043,5 @@ namespace xui
 	inline bool			operator!=( const xui::rect & lhs, const xui::rect & rhs )
 	{
 		return lhs.x != rhs.x || lhs.y != rhs.y || lhs.w != rhs.w || lhs.h != rhs.h;
-	}
-
-	constexpr size_t operator "" _hash( const char * str )
-	{
-		return xui::hash( str );
 	}
 }

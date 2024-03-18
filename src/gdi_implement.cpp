@@ -34,35 +34,7 @@ namespace
         }
         int operator[]( int idx ) const
         {
-            return _release[idx] == 1 ? 0 : _press[idx];
-        }
-
-    public:
-        void flush()
-        {
-            _cursorwheel = {};
-            _unicodes.clear();
-
-            for ( size_t i = xui::event::KEY_EVENT_BEG; i <= xui::event::KEY_EVENT_END; i++ )
-            {
-                if ( _release[i] == 1 )
-                {
-                    _press[i] = 0;
-                    _release[i] = 0;
-                }
-
-                if ( _press[i] > 0 ) _press[i] = 0;
-            }
-            for ( size_t i = xui::event::MOUSE_EVENT_BEG; i <= xui::event::MOUSE_EVENT_END; i++ )
-            {
-                if ( _release[i] == 1 )
-                {
-                    _press[i] = 0;
-                    _release[i] = 0;
-                }
-
-                if ( _press[i] > 0 ) _press[i] += 1;
-            }
+            return _events[idx];
         }
 
     public:
@@ -71,8 +43,7 @@ namespace
         xui::vec2 _cursorwheel = {};
         std::wstring _unicodes = {};
         std::vector<xui::vec2> _touchs;
-        std::array<int, (size_t)xui::event::EVENT_MAX_COUNT> _press = { 0 };
-        std::array<int, (size_t)xui::event::EVENT_MAX_COUNT> _release = { 0 };
+        std::array<int, (size_t)xui::event::EVENT_MAX_COUNT> _events = { 0 };
     };
     struct texture
     {
@@ -314,6 +285,8 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         }
         else if ( msg.message == WM_LBUTTONDOWN )
         {
+            SetCapture( msg.hwnd );
+
             set_event( id, xui::event::KEY_MOUSE_LEFT, 1 );
 
             std::cout << "WM_LBUTTONDOWN" << std::endl;
@@ -326,12 +299,14 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         }
         else if ( msg.message == WM_MOUSEWHEEL )
         {
-            _p->_windows[id].events._cursorwheel = { 0.0f, float( int( msg.wParam ) / WHEEL_DELTA ) };
+            set_wheel( id, { 0.0f, float( int( msg.wParam ) / WHEEL_DELTA ) } );
 
             std::cout << "WM_MOUSEWHEEL: " << std::dec << ( int( msg.wParam ) / WHEEL_DELTA ) << std::endl;
         }
         else if ( msg.message == WM_LBUTTONUP )
         {
+            ReleaseCapture();
+
             set_event( id, xui::event::KEY_MOUSE_LEFT, 1, xui::action::RELEASE );
 
             std::cout << "WM_LBUTTONUP" << std::endl;
@@ -346,19 +321,17 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         {
             TRACKMOUSEEVENT tme;
             tme.cbSize = sizeof( tme );
-            tme.dwFlags = TME_HOVER | TME_LEAVE;
-            tme.dwHoverTime = 10;
+            tme.dwFlags = TME_LEAVE;
+            tme.dwHoverTime = HOVER_DEFAULT;
             tme.hwndTrack = msg.hwnd;
             TrackMouseEvent( &tme );
 
-            _p->_windows[id].events._cursorold = _p->_windows[id].events._cursorpos;
-            _p->_windows[id].events._cursorpos = { (float)( msg.lParam & 0xFFFF ), (float)( ( msg.lParam >> 16 ) & 0xFFFF ) };
-        }
-        else if ( msg.message == WM_MOUSEHOVER )
-        {
             set_event( id, xui::event::MOUSE_ACTIVE, 1 );
 
-            std::cout << "WM_MOUSEHOVER" << std::endl;
+            auto x = (float)(short)LOWORD( msg.lParam );
+            auto y = (float)(short)HIWORD( msg.lParam );
+
+            set_cursor( id, { _p->_windows[id].rect.x + x, _p->_windows[id].rect.y + y } );
         }
         else if ( msg.message == WM_MOUSELEAVE )
         {
@@ -385,13 +358,15 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
             TOUCHINPUT inputs[15];
             UINT count = LOWORD( msg.wParam );
 
+            std::vector<xui::vec2> touchs;
             if ( GetTouchInputInfo( (HTOUCHINPUT)msg.lParam, count, inputs, sizeof( TOUCHINPUT ) ) )
             {
                 for ( size_t i = 0; i < count; i++ )
                 {
-                    _p->_windows[id].events._touchs.push_back( { (float)inputs[i].x, (float)inputs[i].y } );
+                    touchs.push_back( { (float)inputs[i].x, (float)inputs[i].y } );
                 }
             }
+            set_touchs( id, touchs );
         }
         else if ( msg.message == WM_TIMER )
         {
@@ -411,24 +386,6 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
             }
 
             std::cout << "WM_CLOSE" << std::endl;
-        }
-        else if ( msg.message == WM_SIZE )
-        {
-            switch ( msg.wParam )
-            {
-            case SIZE_MAXHIDE:
-                break;
-            case SIZE_MAXIMIZED:
-                break;
-            case SIZE_MAXSHOW:
-                break;
-            case SIZE_MINIMIZED:
-                break;
-            case SIZE_RESTORED:
-                break;
-            }
-
-            std::cout << "WM_SIZE" << std::endl;
         }
         else if ( msg.message == WM_KEYDOWN )
         {
@@ -452,7 +409,7 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         }
         else if ( msg.message == WM_CHAR )
         {
-            _p->_windows[id].events._unicodes.push_back( (wchar_t)msg.wParam );
+            set_unicode( id, (wchar_t)msg.wParam );
 
             std::wcout << L"WM_CHAR: \'" << (wchar_t)msg.wParam << L"\'" << std::endl;
         }
@@ -468,6 +425,8 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         render( paint() );
 
         present();
+
+        DefWindowProcA( msg.hwnd, msg.message, msg.wParam, msg.lParam );
     }
 }
 
@@ -600,16 +559,8 @@ void gdi_implement::set_window_status( xui::window_id id, xui::window_status sho
     case xui::window_status::WINDOW_RESTORE:
     {
         ShowWindow( _p->_windows[id].hwnd, SW_RESTORE );
-
         _p->_windows[id].rect = _p->_windows[id].rrect;
-
         SetWindowPos( _p->_windows[id].hwnd, HWND_BOTTOM, _p->_windows[id].rect.x, _p->_windows[id].rect.y, _p->_windows[id].rect.w, _p->_windows[id].rect.h, SWP_NOZORDER );
-
-        DeleteObject( _p->_windows[id].frame_buffer );
-
-        _p->_windows[id].frame_buffer = CreateBitmap( _p->_windows[id].rect.w, _p->_windows[id].rect.h, 1, 32, nullptr );
-
-        PostMessageA( _p->_windows[id].hwnd, WM_TIMER, 0, 0 );
     }
         break;
     case xui::window_status::WINDOW_MINIMIZE:
@@ -619,20 +570,17 @@ void gdi_implement::set_window_status( xui::window_id id, xui::window_status sho
     {
         ShowWindow( _p->_windows[id].hwnd, SW_MAXIMIZE );
         _p->_windows[id].rrect = _p->_windows[id].rect;
-
+        
         RECT rect;
         GetWindowRect( _p->_windows[id].hwnd, &rect );
-
+        
         _p->_windows[id].rect.x = rect.left;
         _p->_windows[id].rect.y = rect.top;
         _p->_windows[id].rect.w = rect.right - rect.left;
         _p->_windows[id].rect.h = rect.bottom - rect.top;
-
+        
         DeleteObject( _p->_windows[id].frame_buffer );
-
         _p->_windows[id].frame_buffer = CreateBitmap( _p->_windows[id].rect.w, _p->_windows[id].rect.h, 1, 32, nullptr );
-
-        PostMessageA( _p->_windows[id].hwnd, WM_TIMER, 0, 0 );
     }
         break;
     }
@@ -650,13 +598,12 @@ void gdi_implement::set_window_rect( xui::window_id id, const xui::rect & rect )
 {
     if ( id >= _p->_windows.size() )
         return;
+    
+    _p->_windows[id].rect = rect;
+    SetWindowPos( _p->_windows[id].hwnd, HWND_BOTTOM, rect.x, rect.y, rect.w, rect.h, SWP_NOZORDER );
 
     DeleteObject( _p->_windows[id].frame_buffer );
-
-    _p->_windows[id].rect = rect;
-    _p->_windows[id].frame_buffer = CreateBitmap( rect.w, rect.h, 1, 32, nullptr );
-    
-    SetWindowPos( _p->_windows[id].hwnd, HWND_BOTTOM, _p->_windows[id].rect.x, _p->_windows[id].rect.y, _p->_windows[id].rect.w, _p->_windows[id].rect.h, SWP_NOZORDER );
+    _p->_windows[id].frame_buffer = CreateBitmap( _p->_windows[id].rect.w, _p->_windows[id].rect.h, 1, 32, nullptr );
 }
 
 std::string gdi_implement::get_window_title( xui::window_id id ) const
@@ -910,14 +857,20 @@ bool gdi_implement::set_clipboard_data( xui::window_id id, std::string_view mime
     return result;
 }
 
-xui::vec2 gdi_implement::get_wheel( xui::window_id id ) const
+xui::vec2 gdi_implement::get_cursor_dt( xui::window_id id ) const
 {
-    return _p->_windows[id].events.wheel();
+    return _p->_windows[id].events.dt();
 }
 
-xui::vec2 gdi_implement::get_cursor( xui::window_id id ) const
+xui::vec2 gdi_implement::get_cursor_pos( xui::window_id id ) const
 {
-    return _p->_windows[id].events.pos();
+    auto pos = _p->_windows[id].events.pos();
+    return pos - xui::vec2{ _p->_windows[id].rect.x, _p->_windows[id].rect.y };
+}
+
+xui::vec2 gdi_implement::get_cusor_wheel( xui::window_id id ) const
+{
+    return _p->_windows[id].events.wheel();
 }
 
 std::string gdi_implement::get_unicodes( xui::window_id id ) const
@@ -939,8 +892,6 @@ void gdi_implement::present()
 {
     for ( auto & it : _p->_windows )
     {
-        it.events.flush();
-
         HGDIOBJ old_bitmap = SelectObject( _p->_hdc, (HGDIOBJ)it.frame_buffer );
         {
             POINT point = { 0, 0 };
@@ -1059,6 +1010,7 @@ void gdi_implement::render( std::span<xui::drawcmd> cmds )
                 auto f = []( auto & it )
                 {
                     auto beg = it;
+                    if ( *it == '-' || *it == '+' ) it++;
                     while ( std::isdigit( *it ) || *it == '.' ) it++;
 
                     float value = 0;
@@ -1082,6 +1034,10 @@ void gdi_implement::render( std::span<xui::drawcmd> cmds )
 
                 while ( it != element.data.end() )
                 {
+                    if ( element.data.find( '-' ) != std::string::npos )
+                    {
+                        int i = 0;
+                    }
                     switch ( *it )
                     {
                     case 'M':
@@ -1251,7 +1207,8 @@ void gdi_implement::render( std::span<xui::drawcmd> cmds )
         }
     }
     
-    if ( old_obj != nullptr ) SelectObject( _p->_hdc, old_obj );
+    if ( old_obj != nullptr )
+        SelectObject( _p->_hdc, old_obj );
 }
 
 std::shared_ptr<Gdiplus::Pen> gdi_implement::create_pen( const xui::stroke & stroke ) const
@@ -1321,32 +1278,50 @@ std::shared_ptr<Gdiplus::Brush> gdi_implement::create_brush( const xui::filled &
     return nullptr;
 }
 
+void gdi_implement::set_unicode( xui::window_id id, wchar_t unicode )
+{
+    _p->_windows[id].events._unicodes.push_back( unicode );
+}
+
+void gdi_implement::set_wheel( xui::window_id id, const xui::vec2 & dt )
+{
+    _p->_windows[id].events._cursorwheel = dt;
+}
+
+void gdi_implement::set_cursor( xui::window_id id, const xui::vec2 & pos )
+{
+    _p->_windows[id].events._cursorold = _p->_windows[id].events._cursorpos;
+    _p->_windows[id].events._cursorpos = pos;
+}
+
+void gdi_implement::set_touchs( xui::window_id id, std::span<xui::vec2> touchs )
+{
+    _p->_windows[id].events._touchs.assign( touchs.begin(), touchs.end() );
+}
+
 void gdi_implement::set_event( xui::window_id id, xui::event key, int val, xui::action act )
 {
     if ( id != xui::invalid_id )
     {
-        if ( key > xui::event::MOUSE_EVENT_BEG && key <= xui::event::MOUSE_EVENT_END )
+        if ( key >= xui::event::MOUSE_EVENT_BEG && key <= xui::event::MOUSE_EVENT_END )
         {
             if ( key == xui::event::MOUSE_ACTIVE && act == xui::action::RELEASE )
             {
                 _p->_windows[id].events._cursorpos = {};
                 _p->_windows[id].events._cursorold = {};
                 _p->_windows[id].events._cursorwheel = {};
-                std::fill( _p->_windows[id].events._press.begin() + (size_t)xui::event::MOUSE_EVENT_BEG, _p->_windows[id].events._press.begin() + (size_t)xui::event::MOUSE_EVENT_END + 1, 0 );
-                std::fill( _p->_windows[id].events._release.begin() + (size_t)xui::event::MOUSE_EVENT_BEG, _p->_windows[id].events._release.begin() + (size_t)xui::event::MOUSE_EVENT_END + 1, 0 );
+
+                std::fill( _p->_windows[id].events._events.begin() + (size_t)xui::event::MOUSE_EVENT_BEG, _p->_windows[id].events._events.begin() + (size_t)xui::event::MOUSE_EVENT_END + 1, 0 );
             }
-            
-            if ( act == xui::action::PRESS )
-                _p->_windows[id].events._press[(size_t)key] = val;
+
+            if ( act == xui::action::RELEASE )
+                _p->_windows[id].events._events[(size_t)key] = 0;
             else
-                _p->_windows[id].events._release[(size_t)key] = val;
+                _p->_windows[id].events._events[(size_t)key] = 1;
         }
-        else if ( key > xui::event::KEY_EVENT_BEG && key <= xui::event::KEY_EVENT_END )
+        else if ( key >= xui::event::KEY_EVENT_BEG && key <= xui::event::KEY_EVENT_END )
         {
-            if ( act == xui::action::PRESS )
-                _p->_windows[id].events._press[(size_t)key] = val;
-            else
-                _p->_windows[id].events._release[(size_t)key] = val;
+            _p->_windows[id].events._events[(size_t)key] = 1;
         }
     }
 }

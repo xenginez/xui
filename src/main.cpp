@@ -23,18 +23,15 @@ int main()
 	auto icon = imp.create_texture( system_resource::ICON_APPLICATION );
 	auto window = imp.create_window( "XUI", icon, { 500, 540, 600, 600 } );
 
-	ctx.push_font( font );
-	ctx.push_style( &style );
-
 	imp.update( [&]()
 	{
 		ctx.begin();
 		{
-			ctx.push_window_id( window );
+			ctx.push_font( font ); ctx.push_style( &style ); ctx.push_window_id( window );
 			{
 				ctx.push_rect( imp.get_window_rect( window ) );
 				{
-					ctx.begin_window( "超级UI", icon );// , xui::WINDOW_NO_BACKGROUND );
+					ctx.begin_window( "超级UI", icon, xui::window_flag::WINDOW_NO_MINIMIZEBOX );
 					{
 						ctx.push_rect( { 100, 100, 100, 100 } );
 						ctx.label( "奋斗精神鼓励" );
@@ -82,7 +79,7 @@ int main()
 				}
 				ctx.pop_rect();
 			}
-			ctx.pop_window_id();
+			ctx.pop_window_id(); ctx.pop_style(); ctx.pop_font();
 		}
 		return ctx.end();
 	} );
