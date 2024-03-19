@@ -318,7 +318,7 @@ template<> struct std::formatter< std::span<std::string_view, std::dynamic_exten
         auto result = context.out();
         for ( auto it : p )
         {
-            result = std::format_to( result, "{}", it );
+            result = std::format_to( result, "-{}", it );
         }
         return result;
     }
@@ -670,9 +670,176 @@ bool xui::style::parse( std::string_view str )
     return false;
 }
 
-xui::style::variant xui::style::find( std::string_view name ) const
+bool xui::style::find( std::string_view name, std::string_view attr, void * object ) const
 {
+    // {id}#{class}-{element}-{element}:{status}
+    std::string_view id, cls, stat;
+    std::vector<std::string_view> elems;
+    {
+        auto beg = name.begin();
+        auto end = name.end();
+        // id
+        if ( name.find( '#' ) != std::string_view::npos )
+        {
+            end = name.begin() + name.find( '#' );
+            id = { beg, end };
+            beg = end + 1;
+            end = end + 1;
+        }
+        // class
+        if ( name.find( '-' ) != std::string_view::npos )
+        {
+            end = name.begin() + name.find( '-' );
+            cls = { beg, end };
+            beg = end + 1;
+            end = end + 1;
+        }
+        else if ( name.find( ':' ) != std::string_view::npos )
+        {
+            end = name.begin() + name.find( ':' );
+            cls = { beg, end };
+            beg = end + 1;
+            end = end + 1;
+        }
+        else
+        {
+            end = name.end();
+            cls = { beg, end };
+            beg = end;
+        }
+        // elements
+        if ( name.find( '-' ) != std::string_view::npos )
+        {
+            if ( name.find( ':' ) != std::string_view::npos )
+                end = name.begin() + name.find( ':' );
+            else
+                end = name.end();
+
+            while ( beg != end )
+            {
+                auto it = beg;
+                while ( it != end && *it != '-' ) ++it;
+                elems.push_back( { beg, it } );
+                beg = it + 1;
+            }
+        }
+        // status
+        if ( name.find( ':' ) != std::string_view::npos )
+        {
+            end = name.end();
+            stat = { beg, end };
+        }
+    }
+
+    // {id}#{class}-{element}-{element}:{status}
+    auto it = _selectors.find( std::format( "{}#{}{}:{}", id, cls, elems, stat ) );
+    if ( it != _selectors.end() )
+    {
+        auto it2 = it->second.attributes.find( attr );
+        if ( it2 != it->second.attributes.end() )
+        {
+            return find( it->second, it2->second, it->second.element, object );
+        }
+    }
+    // {id}#{class}-{element}-{element}
+    auto it = _selectors.find( std::format( "{}#{}{}", id, cls, elems ) );
+    if ( it != _selectors.end() )
+    {
+        auto it2 = it->second.attributes.find( attr );
+        if ( it2 != it->second.attributes.end() )
+        {
+            return find( it->second, it2->second, it->second.element, object );
+        }
+    }
+    // #{class}-{element}-{element}
+    auto it = _selectors.find( std::format( "#{}{}", cls, elems ) );
+    if ( it != _selectors.end() )
+    {
+        auto it2 = it->second.attributes.find( attr );
+        if ( it2 != it->second.attributes.end() )
+        {
+            return find( it->second, it2->second, it->second.element, object );
+        }
+    }
+    // #{class}-{element}
+    while( !elems.empty() )
+    {
+        auto it = _selectors.find( std::format( "#{}{}", id, cls, elems ) );
+        if ( it != _selectors.end() )
+        {
+            auto it2 = it->second.attributes.find( attr );
+            if ( it2 != it->second.attributes.end() )
+            {
+                return find( it->second, it2->second, it->second.element, object );
+            }
+        }
+        elems.pop_back();
+    }
+    // #{class}
+    auto it = _selectors.find( std::format( "#{}", cls ) );
+    if ( it != _selectors.end() )
+    {
+        auto it2 = it->second.attributes.find( attr );
+        if ( it2 != it->second.attributes.end() )
+        {
+            return find( it->second, it2->second, it->second.element, object );
+        }
+    }
+    // #
+    auto it = _selectors.find( "#" );
+    if ( it != _selectors.end() )
+    {
+        auto it2 = it->second.attributes.find( attr );
+        if ( it2 != it->second.attributes.end() )
+        {
+            return find( it->second, it2->second, it->second.element, object );
+        }
+    }
+
+
     return {};
+}
+
+bool xui::style::find( const selector & select, const selector::attribute & attr, const meta_element * element, void * object ) const
+{
+    if ( attr.data == "inherit" )
+    {
+        return find( select, attr, element->parent, object );
+    }
+
+    auto it = std::find_if( element->attributes.begin(), element->attributes.end(), [&attr]( const auto & val ) { return attr.name == val.name; } );
+    if ( it != element->attributes.end() )
+    {
+        if( auto meta = find_struct( it->type ) )
+        {
+            meta->construct( object, attr.data );
+
+            for ( const auto & prop : meta->propertys )
+            {
+                auto it2 = select.attributes.find( std::format( "{}-{}", attr.name, prop.name ) );
+                if ( it2 != select.attributes.end() )
+                {
+                    find( select, it2->second, element, prop, object );
+                }
+            }
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool xui::style::find( const selector & select, const selector::attribute & attr, const meta_element * element, const meta_property & prop, void * object ) const
+{
+    if ( attr.data == "inherit" )
+    {
+        return find( select, attr, element->parent, prop, object );
+    }
+
+    prop.setter( object, attr.data );
+
+    return true;
 }
 
 void xui::style::register_class( meta_class * cls )
@@ -1006,21 +1173,16 @@ void xui::context::pop_style()
     _p->_styles.pop_back();
 }
 
-xui::style::variant xui::context::current_style( std::string_view attr ) const
+bool xui::context::current_style( std::string_view attr, void * object ) const
 {
     std::string name = style_name();
 
-    name.append( "@" );
-    name.append( attr );
-
     for ( auto it = _p->_styles.rbegin(); it != _p->_styles.rend(); ++it )
     {
-        auto val = ( *it )->find( name );
-        if ( val.index() != 0 )
-            return val;
+        return ( *it )->find( name, attr, object );
     }
 
-    return {};
+    return false;
 }
 
 void xui::context::push_style_type( std::string_view type )
@@ -1662,7 +1824,7 @@ float xui::context::slider( xui::string_id str_id, float & value, float min, flo
                 float backtop = back_rect.y;
                 float backbottom = back_rect.y + back_rect.h;
 
-                switch ( current_style( "direction" ).value<xui::direction>( xui::direction::LEFT_RIGHT ) )
+                switch ( current_style( "direction", xui::direction::LEFT_RIGHT ) )
                 {
                 case xui::direction::LEFT_RIGHT:
                 {
@@ -1769,7 +1931,7 @@ bool xui::context::process( xui::string_id str_id, float value, float min, float
                 xui::rect cursor_rect;
                 value = ( value - min ) / ( max - min );
 
-                switch ( current_style( "direction" ).value<xui::direction>( xui::direction::LEFT_RIGHT ) )
+                switch ( current_style( "direction", xui::direction::LEFT_RIGHT ) )
                 {
                 case xui::direction::LEFT_RIGHT:
                     cursor_rect = { back_rect.x, back_rect.y, back_rect.w * value, back_rect.h };

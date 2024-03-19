@@ -440,13 +440,12 @@ namespace xui
 		struct meta_element
 		{
 			std::string_view name;
+			meta_element * parent = nullptr;
 			std::vector<meta_attribute> attributes;
 		};
-		struct meta_class
+		struct meta_class : public meta_element
 		{
-			std::string_view name;
 			std::vector<meta_element> elements;
-			std::vector<meta_attribute> attributes;
 		};
 
 	public:
@@ -457,12 +456,22 @@ namespace xui
 				std::string_view name;
 				std::string_view data;
 			};
-			std::pmr::map<std::string_view, attribute> attrs;
+
+			const meta_element * element = nullptr;
+			std::pmr::map<std::string_view, attribute> attributes;
 		};
 
 	public:
 		bool parse( std::string_view xss );
-		xui::style::variant find( std::string_view name ) const;
+		template<typename T> bool find( std::string_view type, std::string_view attr, T & object ) const
+		{
+			return find( name, &object );
+		}
+
+	public:
+		bool find( std::string_view name, std::string_view attr, void * object ) const;
+		bool find( const selector & select, const selector::attribute & attr, const meta_element * element, void * object ) const;
+		bool find( const selector & select, const selector::attribute & attr, const meta_element * element, const meta_property & prop, void * object ) const;
 
 	public:
 		static void register_class( meta_class * cls );
@@ -602,10 +611,11 @@ namespace xui
 	public:
 		void push_style( xui::style * style );
 		void pop_style();
-		xui::style::variant current_style( std::string_view attr ) const;
+		bool current_style( std::string_view attr, void * object ) const;
 		template<typename T> T current_style( std::string_view attr, const T & def ) const
 		{
-			return current_style( attr ).value<T>( def );
+			T value;
+			return current_style( attr, &value ) ? value : def;
 		}
 
 		void push_style_type( std::string_view type );
