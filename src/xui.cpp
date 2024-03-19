@@ -667,6 +667,10 @@ void xui::style::meta_struct::_calc_construct( const meta_struct & _m, void * _o
 
 bool xui::style::parse( std::string_view str )
 {
+    _data = str;
+
+
+
     return false;
 }
 
@@ -802,6 +806,9 @@ bool xui::style::find( std::string_view name, std::string_view attr, void * obje
 
 bool xui::style::find( const selector & select, const selector::attribute & attr, const meta_element * element, void * object ) const
 {
+    if ( element == nullptr )
+        return false;
+
     if ( attr.data == "inherit" )
     {
         return find( select, attr, element->parent, object );
@@ -832,6 +839,9 @@ bool xui::style::find( const selector & select, const selector::attribute & attr
 
 bool xui::style::find( const selector & select, const selector::attribute & attr, const meta_element * element, const meta_property & prop, void * object ) const
 {
+    if ( element == nullptr )
+        return false;
+
     if ( attr.data == "inherit" )
     {
         return find( select, attr, element->parent, prop, object );
