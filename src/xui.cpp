@@ -10,6 +10,250 @@
 #define XUI_ERR( CODE )  if ( _p->_error ) _p->_error( this, xui_category::make_error_code( xui::err::CODE ) );
 #define XUI_SCALE( VAL ) ( VAL * _p->_factor )
 
+std::string_view data;
+
+namespace xui
+{
+    using string = std::string;
+    
+    BEG_STRUCT( bool )
+        CONSTRUCT( *object = data == "true"; );
+    END_STRUCT( bool )
+
+    BEG_STRUCT( int )
+        CONSTRUCT( std::from_chars( data.data(), data.data() + data.size(), *object ); );
+    END_STRUCT( int )
+
+    BEG_STRUCT( float )
+        CONSTRUCT( std::from_chars( data.data(), data.data() + data.size(), *object ); );
+    END_STRUCT( float )
+
+    BEG_STRUCT( string )
+        CONSTRUCT( object->assign( data.begin(), data.end() ); );
+    END_STRUCT( string )
+
+    BEG_STRUCT( url )
+        CONSTRUCT( *object = data; );
+    END_STRUCT( url )
+
+    BEG_STRUCT( size )
+        CONSTRUCT(
+        {
+            auto beg = data.begin();
+            auto end = data.end();
+            if ( data.find( ' ' ) != std::string_view::npos )
+                end = data.begin() + data.find( ' ' );
+            std::from_chars( beg.operator->(), end.operator->(), object->w );
+
+            if ( end == data.end() )
+                return;
+            beg = end + 1;
+            end = data.end();
+            std::from_chars( beg.operator->(), end.operator->(), object->h );
+        } );
+        PROP( w, std::from_chars( data.data(), data.data() + data.size(), object->w ); )
+        PROP( h, std::from_chars( data.data(), data.data() + data.size(), object->h ); )
+    END_STRUCT( size )
+
+    BEG_STRUCT( rect )
+        CONSTRUCT(
+        {
+            auto beg = data.begin();
+            auto end = data.end();
+            if ( data.find( ' ' ) != std::string_view::npos )
+                end = data.begin() + data.find( ' ' );
+
+            std::from_chars( beg.operator->(), end.operator->(), object->x );
+
+            if ( end == data.end() )
+                return;
+            beg = end + 1;
+            end = data.end();
+            std::from_chars( beg.operator->(), end.operator->(), object->y );
+
+            if ( end == data.end() )
+                return;
+            beg = end + 1;
+            end = data.end();
+            std::from_chars( beg.operator->(), end.operator->(), object->w );
+
+            if ( end == data.end() )
+                return;
+            beg = end + 1;
+            end = data.end();
+            std::from_chars( beg.operator->(), end.operator->(), object->h );
+        } );
+        PROP( x, std::from_chars( data.data(), data.data() + data.size(), object->x ); )
+        PROP( y, std::from_chars( data.data(), data.data() + data.size(), object->y ); )
+        PROP( w, std::from_chars( data.data(), data.data() + data.size(), object->w ); )
+        PROP( h, std::from_chars( data.data(), data.data() + data.size(), object->h ); )
+    END_STRUCT( rect )
+            
+    BEG_STRUCT( vec2 )
+        CONSTRUCT(
+        {
+            auto beg = data.begin();
+            auto end = data.end();
+            if ( data.find( ' ' ) != std::string_view::npos )
+                end = data.begin() + data.find( ' ' );
+            std::from_chars( beg.operator->(), end.operator->(), object->x );
+
+            if ( end == data.end() ) return;
+            beg = end + 1;
+            end = data.end();
+            std::from_chars( beg.operator->(), end.operator->(), object->y );
+        } );
+        PROP( x, std::from_chars( data.data(), data.data() + data.size(), object->x ); )
+        PROP( y, std::from_chars( data.data(), data.data() + data.size(), object->y ); )
+    END_STRUCT( vec2 )
+            
+    BEG_STRUCT( vec4 )
+        CONSTRUCT(
+        {
+            auto beg = data.begin();
+            auto end = data.end();
+            if ( data.find( ' ' ) != std::string_view::npos )
+                end = data.begin() + data.find( ' ' );
+
+            std::from_chars( beg.operator->(), end.operator->(), object->x );
+
+            if ( end == data.end() ) return;
+            beg = end + 1;
+            end = data.end();
+            std::from_chars( beg.operator->(), end.operator->(), object->y );
+
+            if ( end == data.end() ) return;
+            beg = end + 1;
+            end = data.end();
+            std::from_chars( beg.operator->(), end.operator->(), object->z );
+
+            if ( end == data.end() ) return;
+            beg = end + 1;
+            end = data.end();
+            std::from_chars( beg.operator->(), end.operator->(), object->w );
+        } );
+        PROP( x, std::from_chars( data.data(), data.data() + data.size(), object->x ); )
+        PROP( y, std::from_chars( data.data(), data.data() + data.size(), object->y ); )
+        PROP( z, std::from_chars( data.data(), data.data() + data.size(), object->z ); )
+        PROP( w, std::from_chars( data.data(), data.data() + data.size(), object->w ); )
+    END_STRUCT( vec4 )
+            
+    BEG_STRUCT( color )
+        CONSTRUCT(
+        {
+            if ( data.front() == '#' )
+            {
+                std::from_chars( data.data() + 1, data.data() + data.size(), object->hex, 16 );
+            }
+            else if ( data.find( "rgba" ) != std::string_view::npos )
+            {
+                auto beg = data.begin() + data.find( '(' ) + 1;
+                auto end = data.begin() + data.find( ',' );
+                std::from_chars( beg.operator->(), end.operator->(), object->r );
+
+                beg = end + 1;
+                end = data.begin() + data.find( ',', std::distance( data.begin(), beg ) );
+                std::from_chars( beg.operator->(), end.operator->(), object->g );
+
+                beg = end + 1;
+                end = data.begin() + data.find( ',', std::distance( data.begin(), beg ) );
+                std::from_chars( beg.operator->(), end.operator->(), object->b );
+
+                beg = end + 1;
+                end = data.begin() + data.find( ')', std::distance( data.begin(), beg ) );
+                std::from_chars( beg.operator->(), end.operator->(), object->a );
+            }
+            else if ( data.find( "rgb" ) != std::string_view::npos )
+            {
+                auto beg = data.begin() + data.find( '(' ) + 1;
+                auto end = data.begin() + data.find( ',' );
+                std::from_chars( beg.operator->(), end.operator->(), object->r );
+
+                beg = end + 1;
+                end = data.begin() + data.find( ',', std::distance( data.begin(), beg ) );
+                std::from_chars( beg.operator->(), end.operator->(), object->g );
+
+                beg = end + 1;
+                end = data.begin() + data.find( ')', std::distance( data.begin(), beg ) );
+                std::from_chars( beg.operator->(), end.operator->(), object->b );
+            }
+        } );
+        PROP( r, std::from_chars( data.data(), data.data() + data.size(), object->r ); )
+        PROP( g, std::from_chars( data.data(), data.data() + data.size(), object->g ); )
+        PROP( b, std::from_chars( data.data(), data.data() + data.size(), object->b ); )
+        PROP( a, std::from_chars( data.data(), data.data() + data.size(), object->a ); )
+    END_STRUCT( color )
+            
+    BEG_STRUCT( hatch )
+        CONSTRUCT( {} );
+        PROP_TYPE( fore_color, color )
+        PROP_TYPE( back_color, color )
+    END_STRUCT( hatch )
+
+    BEG_STRUCT( linear )
+        CONSTRUCT( {} );
+        PROP_TYPE( p1, vec2 )
+        PROP_TYPE( c1, color )
+        PROP_TYPE( p1, vec2 )
+        PROP_TYPE( c2, color )
+    END_STRUCT( linear )
+            
+    BEG_STRUCT( stroke )
+        CONSTRUCT( {} );
+        PROP( style,
+        {
+            switch ( xui::hash( data.data() ) )
+            {
+            case xui::hash( "solid" ): object->style = xui::stroke::SOLID; break;
+            case xui::hash( "dashed" ): object->style = xui::stroke::DASHED; break;
+            case xui::hash( "dotted" ): object->style = xui::stroke::DOTTED; break;
+            case xui::hash( "dash_dot" ): object->style = xui::stroke::DASH_DOT; break;
+            case xui::hash( "dash_dot_dot" ): object->style = xui::stroke::DASH_DOT_DOT; break;
+            }
+        } )
+        PROP_TYPE( width, float )
+        PROP_TYPE( color, color )
+    END_STRUCT( stroke )
+
+    BEG_STRUCT( border, stroke )
+        CONSTRUCT( {} );
+        PROP_TYPE( radius, vec4 )
+    END_STRUCT( border )
+
+    BEG_ENUM( direction )
+        VALUE( "ltr", direction::LEFT_RIGHT )
+        VALUE( "rtl", direction::RIGHT_LEFT )
+        VALUE( "left to right", direction::LEFT_RIGHT )
+        VALUE( "right to left", direction::RIGHT_LEFT )
+        VALUE( "top to bottom", direction::TOP_BOTTOM )
+        VALUE( "bottom to top", direction::BOTTOM_TOP )
+    END_ENUM( direction )
+
+    BEG_ENUM( orientation )
+        VALUE( "top", orientation::ORIENT_TOP )
+        VALUE( "left", orientation::ORIENT_LEFT )
+        VALUE( "right", orientation::ORIENT_RIGHT )
+        VALUE( "bottom", orientation::ORIENT_BOTTOM )
+    END_ENUM( orientation )
+
+    BEG_FLAGS( alignment_flag )
+        FLAG( "left", alignment_flag::ALIGN_LEFT )
+        FLAG( "right", alignment_flag::ALIGN_RIGHT )
+        FLAG( "top", alignment_flag::ALIGN_TOP )
+        FLAG( "bottom", alignment_flag::ALIGN_BOTTOM )
+        FLAG( "vcenter", alignment_flag::ALIGN_VCENTER )
+        FLAG( "hcenter", alignment_flag::ALIGN_HCENTER )
+        FLAG( "center", alignment_flag::ALIGN_CENTER )
+    END_FLAGS( alignment_flag )
+
+    BEG_CLASS( window );
+        ATTR( filled, color )
+        BEG_ELEMENT( title )
+            ATTR( filled, color )
+        END_ELEMENT( title )
+    END_CLASS( window );
+}
+
 namespace
 {
     static std::regex int_regex{ R"([-+]?([0-9]*[0-9]+))" };
@@ -58,7 +302,6 @@ namespace
         xui::window_id id = xui::invalid_id;
         xui::event event = xui::event::EVENT_MAX_COUNT;
     };
-
     struct window_type
     {
         int flags;
@@ -390,711 +633,80 @@ xui::color xui::color::lerp( const xui::color & target, float t ) const
     };
 }
 
-xui::style::style( std::pmr::memory_resource * res )
-    : _selectors( res )
+void xui::style::meta_struct::_calc_construct( const meta_struct & _m, void * _o, std::string_view _d )
 {
+    std::array<std::string_view, 10> list;
 
+    uint32_t * object = (uint32_t *)( _o );
+
+    size_t i = 0;
+    auto beg = _d.begin();
+    auto it = _d.begin();
+    for ( size_t i = 0; i < list.size() && it != _d.end(); i++ )
+    {
+        while ( it != _d.end() && ( *it ) != '|' ) ++it;
+        auto it2 = it;
+        while ( *beg == ' ' ) ++beg;
+        while ( *it == ' ' ) --it;
+
+        list[i] = { beg, it };
+
+        if ( it2 != _d.end() ) it = it2 + 1;
+    }
+
+    for ( size_t i = 0; i < list.size() && !list[i].empty(); i++ )
+    {
+        auto it = std::find_if( _m.propertys.begin(), _m.propertys.end(), [&]( const auto & prop ) { return ( prop.name == list[i] ); } );
+        if ( it != _m.propertys.end() )
+        {
+            uint32_t p = 0; it->setter( &p, list[i] );
+            *object |= p;
+        }
+    }
 }
 
 bool xui::style::parse( std::string_view str )
 {
-    _selectors.clear();
-
-    bool result = true;
-    std::string name;
-    auto beg = str.begin();
-    auto end = str.end();
-
-    while ( beg != end )
-    {
-        if ( std::isspace( *beg ) )
-        {
-            ++beg;
-        }
-        else if ( *beg == '{' )
-        {
-            _selectors.insert( { name, parse_selector( beg, end ) } );
-            name.clear();
-        }
-        else if ( *beg == ',' )
-        {
-            ++beg;
-        }
-        else
-        {
-            name.push_back( *beg++ );
-        }
-    }
-
-    return result;
+    return false;
 }
 
 xui::style::variant xui::style::find( std::string_view name ) const
 {
-    // {type}-{element}-{element}-{element}:{action}#{id}@{attr}
-    std::string_view type, action, id, attr;
-    std::pmr::vector<std::string_view> elements( _selectors.get_allocator().resource() );
-
-
-    // {attr}
-    if ( name.find( '@' ) != std::string_view::npos )
-    {
-        attr = { name.begin() + name.find( '@' ) + 1, name.end() };
-        name = { name.begin(), name.begin() + name.find( '@' ) };
-    }
-    // {id}
-    if ( name.find( '#' ) != std::string_view::npos )
-    {
-        id = { name.begin() + name.find( '#' ), name.end() };
-        name = { name.begin(), name.begin() + name.find( '#' ) };
-    }
-    // {action}
-    if ( name.find( ':' ) != std::string_view::npos )
-    {
-        action = { name.begin() + name.find( ':' ), name.end() };
-        name = { name.begin(), name.begin() + name.find( ':' ) };
-    }
-    // {element}
-    while ( name.find( '-' ) != std::string_view::npos )
-    {
-        elements.insert( elements.begin(), { name.begin() + name.find_last_of( '-' ), name.end() } );
-        name = { name.begin(), name.begin() + name.find_last_of( '-' ) };
-    }
-    // {type}
-    if ( !name.empty() )
-    {
-        type = name;
-    }
-
-    std::optional<xui::style::variant> opt;
-
-    // {type}-{element}-{element}-{element}:{action}#{id}@{attr}
-    opt = find( std::format( "{}{}{}{}", type, std::span<std::string_view>{ elements }, action, id ), attr );
-    if ( opt.has_value() && opt.value().index() != variant::inherit_idx )
-    {
-        return opt.value();
-    }
-
-    // {type}-{element}-{element}-{element}:{action}@{attr}
-    opt = find( std::format( "{}{}{}", type, std::span<std::string_view>{ elements }, action ), attr );
-    if ( opt.has_value() && opt.value().index() != variant::inherit_idx )
-    {
-        return opt.value();
-    }
-
-    // {type}-{element}-{element}-{element}@{attr}
-    opt = find( std::format( "{}{}", type, std::span<std::string_view>{ elements } ), attr );
-    if ( opt.has_value() && opt.value().index() != variant::inherit_idx )
-    {
-        return opt.value();
-    }
-
-    // {type}-{element}-{element}@{attr}
-    // {type}-{element}@{attr}
-    if ( !elements.empty() )
-    {
-        auto beg = elements.begin();
-        auto end = elements.end();
-
-        while ( beg != end )
-        {
-            opt = find( std::format( "{}{}", type, std::span<std::string_view>{ beg, end } ), attr );
-            if ( opt.has_value() && opt.value().index() != variant::inherit_idx )
-            {
-                return opt.value();
-            }
-
-            --end;
-        }
-    }
-
-    // {type}@{attr}
-    opt = find( { type.begin(), type.end() }, attr );
-    if ( opt.has_value() && opt.value().index() != variant::inherit_idx )
-    {
-        return opt.value();
-    }
-
-    // *@{attr}
-    opt = find( "*", attr );
-    if ( opt.has_value() && opt.value().index() != variant::inherit_idx )
-    {
-        return opt.value();
-    }
-
-
     return {};
 }
 
-std::optional<xui::style::variant> xui::style::find( std::string_view type, std::string_view attr ) const
+void xui::style::register_class( meta_class * cls )
 {
-    auto it = _selectors.find( { type.begin(), type.end() } );
-    if ( it != _selectors.end() )
-    {
-        auto it2 = it->second.attrs.find( { attr.begin(), attr.end() } );
-        if ( it2 != it->second.attrs.end() )
-        {
-            if ( it2->second.index() == xui::style::variant::inherit_idx )
-            {
-                int i = 0;
-            }
-            return it2->second;
-        }
-    }
-    return {};
+    meta_class_map().insert( { cls->name, cls } );
 }
 
-xui::style::selector xui::style::parse_selector( std::string_view::iterator & beg, std::string_view::iterator end )
+void xui::style::register_struct( meta_struct * str )
 {
-    _ASSERT( *beg++ == '{' && "" );
-
-    std::string name;
-    xui::style::selector select;
-
-    while ( beg != end )
-    {
-        if ( std::isspace( *beg ) )
-        {
-            ++beg;
-        }
-        else if ( *beg == ':' )
-        {
-            ++beg;
-            select.attrs.insert( { name, parse_attribute( beg, end ) } );
-            name.clear();
-        }
-        else if( *beg == ';' )
-        {
-            ++beg;
-            name.clear();
-        }
-        else if ( *beg == '}' )
-        {
-            ++beg;
-            return select;
-        }
-        else
-        {
-            name.push_back( *beg++ );
-        }
-    }
-
-    return select;
+    meta_struct_map().insert( { str->name, str } );
 }
 
-xui::style::variant xui::style::parse_attribute( std::string_view::iterator & beg, std::string_view::iterator end )
+const xui::style::meta_class * xui::style::find_class( std::string_view name )
 {
-    std::string value;
-
-    while ( beg != end )
-    {
-        if ( value.empty() && std::isspace( *beg ) )
-        {
-            ++beg;
-        }
-        else if ( *beg == '#' )
-        {
-            return parse_hex( beg, end );
-        }
-        else if ( *beg == '(' )
-        {
-            if ( functions().find( value ) != functions().end() )
-            {
-                return functions()[value]( beg, end );
-            }
-            else
-            {
-                break;
-            }
-        }
-        else if ( *beg == ',' || *beg == ';' || *beg == ')' )
-        {
-            ++beg;
-
-            while ( std::isspace( value.back() ) ) value.pop_back();
-
-            if ( value == "inherit" )
-            {
-                return xui::style::inherit();
-            }
-            else if ( std::regex_match( value, int_regex ) )
-            {
-                return std::stoi( value );
-            }
-            else if ( std::regex_match( value, flt_regex ) )
-            {
-                return std::stof( value );
-            }
-            else if ( flags().find( value ) != flags().end() )
-            {
-                return flags()[value];
-            }
-            else if ( colors().find( value ) != colors().end() )
-            {
-                return xui::color( colors()[value] );
-            }
-            else
-            {
-                break;
-            }
-        }
-        else
-        {
-            value.push_back( *beg++ );
-        }
-    }
-
-    return value;
+    auto it = meta_class_map().find( name );
+    return it != meta_class_map().end() ? it->second : nullptr;
 }
 
-xui::color xui::style::parse_light( std::string_view::iterator & beg, std::string_view::iterator end )
+const xui::style::meta_struct * xui::style::find_struct( std::string_view name )
 {
-    _ASSERT( *beg++ == '(' && "" );
-
-    return parse_attribute( beg, end ).value<xui::color>().light();
+    auto it = meta_struct_map().find( name );
+    return it != meta_struct_map().end() ? it->second : nullptr;
 }
 
-xui::color xui::style::parse_dark( std::string_view::iterator & beg, std::string_view::iterator end )
+std::map<std::string_view, xui::style::meta_class *> & xui::style::meta_class_map()
 {
-    _ASSERT( *beg++ == '(' && "" );
-
-    return parse_attribute( beg, end ).value<xui::color>().dark();
+    static std::map<std::string_view, xui::style::meta_class *> map;
+    return map;
 }
 
-xui::color xui::style::parse_rgba( std::string_view::iterator & beg, std::string_view::iterator end )
+std::map<std::string_view, xui::style::meta_struct *> & xui::style::meta_struct_map()
 {
-    _ASSERT( *beg++ == '(' && "" );
-
-    xui::color result;
-
-    result.r = parse_attribute( beg, end ).value<int>(); if (check<','>( beg, end ) ) ++beg;
-    result.g = parse_attribute( beg, end ).value<int>(); if (check<','>( beg, end ) ) ++beg;
-    result.b = parse_attribute( beg, end ).value<int>(); if (check<','>( beg, end ) ) ++beg;
-    result.a = parse_attribute( beg, end ).value<int>(); if (check<')'>( beg, end ) ) ++beg;
-
-    return result;
-}
-
-xui::color xui::style::parse_rgb( std::string_view::iterator & beg, std::string_view::iterator end )
-{
-    _ASSERT( *beg++ == '(' && "" );
-
-    xui::color result;
-
-    result.r = parse_attribute( beg, end ).value<int>(); if ( check<','>( beg, end ) ) ++beg;
-    result.g = parse_attribute( beg, end ).value<int>(); if ( check<','>( beg, end ) ) ++beg;
-    result.b = parse_attribute( beg, end ).value<int>(); if ( check<')'>( beg, end ) ) ++beg;
-
-    return result;
-}
-
-xui::vec2 xui::style::parse_vec2( std::string_view::iterator & beg, std::string_view::iterator end )
-{
-    _ASSERT( *beg++ == '(' && "" );
-
-    xui::vec2 result;
-
-    result.x = parse_attribute( beg, end ).value<float>(); if ( check<','>( beg, end ) ) ++beg;
-    result.y = parse_attribute( beg, end ).value<float>(); if ( check<')'>( beg, end ) ) ++beg;
-
-    return result;
-}
-
-xui::vec4 xui::style::parse_vec4( std::string_view::iterator & beg, std::string_view::iterator end )
-{
-    _ASSERT( *beg++ == '(' && "" );
-
-    xui::vec4 result;
-
-    result.x = parse_attribute( beg, end ).value<float>(); if ( check<','>( beg, end ) ) ++beg;
-    result.y = parse_attribute( beg, end ).value<float>(); if ( check<','>( beg, end ) ) ++beg;
-    result.z = parse_attribute( beg, end ).value<float>(); if ( check<','>( beg, end ) ) ++beg;
-    result.w = parse_attribute( beg, end ).value<float>(); if ( check<')'>( beg, end ) ) ++beg;
-
-    return result;
-}
-
-xui::color xui::style::parse_hex( std::string_view::iterator & beg, std::string_view::iterator end )
-{
-    _ASSERT( *beg++ == '#' && "" );
-
-    xui::color color;
-
-    auto it = beg;
-    while ( *it != ';' ) ++it;
-
-    std::from_chars( beg.operator->(), it.operator->(), color.hex, 16 );
-    beg = it;
-
-    return color;
-}
-
-xui::url xui::style::parse_url( std::string_view::iterator & beg, std::string_view::iterator end )
-{
-    _ASSERT( *beg++ == '(' && "" );
-
-    std::string result;
-
-    while ( beg != end && *beg != ')' )
-    {
-        if ( !std::isspace( *beg ) )
-            result.push_back( *beg++ );
-        else
-            ++beg;
-    }
-
-    check<')'>( beg, end );
-
-    return result;
-}
-
-xui::hatch_color xui::style::parse_hatch( std::string_view::iterator & beg, std::string_view::iterator end )
-{
-    _ASSERT( *beg++ == '(' && "" );
-
-    xui::hatch_color result;
-
-    result.fore = parse_attribute( beg, end ).value<xui::color>(); if ( check<','>( beg, end ) ) ++beg;
-    result.back = parse_attribute( beg, end ).value<xui::color>(); if ( check<')'>( beg, end ) ) ++beg;
-
-    return result;
-}
-
-xui::texture_brush xui::style::parse_sample( std::string_view::iterator & beg, std::string_view::iterator end )
-{
-    _ASSERT( *beg++ == '(' && "" );
-
-    xui::texture_brush result;
-
-    result.image = parse_attribute( beg, end ).value<xui::url>(); if ( check<','>( beg, end ) ) ++beg;
-    result.mode = parse_attribute( beg, end ).value<xui::texture_brush::warp>(); if ( check<')'>( beg, end ) ) ++beg;
-
-    return result;
-}
-
-xui::linear_gradient xui::style::parse_linear( std::string_view::iterator & beg, std::string_view::iterator end )
-{
-    _ASSERT( *beg++ == '(' && "" );
-
-    xui::linear_gradient result;
-
-    result.p1 = parse_attribute( beg, end ).value<xui::vec2>(); if ( check<','>( beg, end ) ) ++beg;
-    result.p2 = parse_attribute( beg, end ).value<xui::vec2>(); if ( check<','>( beg, end ) ) ++beg;
-    result.c1 = parse_attribute( beg, end ).value<xui::color>(); if ( check<','>( beg, end ) ) ++beg;
-    result.c2 = parse_attribute( beg, end ).value<xui::color>(); if ( check<')'>( beg, end ) ) ++beg;
-
-    return result;
-}
-
-xui::stroke xui::style::parse_stroke( std::string_view::iterator & beg, std::string_view::iterator end )
-{
-    _ASSERT( *beg++ == '(' && "" );
-
-    xui::stroke result;
-
-    result.style = parse_attribute( beg, end ).value<uint32_t>(); if ( check<','>( beg, end ) ) ++beg;
-    result.width = parse_attribute( beg, end ).value<float>(); if ( check<','>( beg, end ) ) ++beg;
-    result.color = parse_attribute( beg, end ).value<xui::color>(); if ( check<')'>( beg, end ) ) ++beg;
-
-    return result;
-}
-
-xui::border xui::style::parse_border( std::string_view::iterator & beg, std::string_view::iterator end )
-{
-    _ASSERT( *beg++ == '(' && "" );
-
-    xui::border result;
-
-    result.style = parse_attribute( beg, end ).value<uint32_t>(); if ( check<','>( beg, end ) ) ++beg;
-    result.width = parse_attribute( beg, end ).value<float>(); if ( check<','>( beg, end ) ) ++beg;
-    result.color = parse_attribute( beg, end ).value<xui::color>(); if ( check<','>( beg, end ) ) ++beg;
-    result.radius = parse_attribute( beg, end ).value<xui::vec4>(); if ( check<')'>( beg, end ) ) ++beg;
-
-    return result;
-}
-
-xui::filled xui::style::parse_filled( std::string_view::iterator & beg, std::string_view::iterator end )
-{
-    _ASSERT( *beg++ == '(' && "" );
-
-    xui::filled result;
-
-    result.style = parse_attribute( beg, end ).value<uint32_t>(); if ( check<','>( beg, end ) ) ++beg;
-    switch ( result.style )
-    {
-    case xui::filled::SOLID:
-        result.colors = parse_attribute( beg, end ).value<xui::color>(); if ( check<')'>( beg, end ) ) ++beg;
-        break;
-    case xui::filled::DENSE1:
-    case xui::filled::DENSE2:
-    case xui::filled::DENSE3:
-    case xui::filled::DENSE4:
-    case xui::filled::DENSE5:
-    case xui::filled::DENSE6:
-    case xui::filled::DENSE7:
-    case xui::filled::HORIZONTAL:
-    case xui::filled::VERTICAL:
-    case xui::filled::CROSS:
-    case xui::filled::FORWARD:
-    case xui::filled::BACKWARD:
-    case xui::filled::DIAGCROSS:
-        result.colors = parse_attribute( beg, end ).value<xui::hatch_color>(); if ( check<')'>( beg, end ) ) ++beg;
-        break;
-    case xui::filled::TEXTURE:
-        result.colors = parse_attribute( beg, end ).value<xui::texture_brush>(); if ( check<')'>( beg, end ) ) ++beg;
-        break;
-    case xui::filled::LINEAR_GRADIENT:
-        result.colors = parse_attribute( beg, end ).value<xui::linear_gradient>(); if ( check<')'>( beg, end ) ) ++beg;
-        break;
-    }
-
-    return result;
-}
-
-std::map<std::string_view, std::uint32_t> & xui::style::flags()
-{
-    static std::map<std::string_view, std::uint32_t> style_flags =
-    {
-        // texture_brush mode
-        { "tile", xui::texture_brush::warp::WRAP_TILE },
-        { "flipx", xui::texture_brush::warp::WRAP_TILEFLIPX },
-        { "flipy", xui::texture_brush::warp::WRAP_TILEFLIPY },
-        { "flipxy", xui::texture_brush::warp::WRAP_TILEFLIPXY },
-        { "clamp", xui::texture_brush::warp::WRAP_CLAMP },
-
-        // stroke filled share
-        { "solid", 0 }, // { "solid", xui::stroke::SOLID }, { "solid", xui::drawcmd::filled::SOLID },
-
-        // stroke style
-        { "dashed", xui::stroke::DASHED },
-        { "dotted", xui::stroke::DOTTED },
-        { "dashdot", xui::stroke::DASH_DOT },
-        { "dashdotdot", xui::stroke::DASH_DOT_DOT },
-
-        // filled style
-        { "dense1", xui::filled::DENSE1 },
-        { "dense2", xui::filled::DENSE2 },
-        { "dense3", xui::filled::DENSE3 },
-        { "dense4", xui::filled::DENSE4 },
-        { "dense5", xui::filled::DENSE5 },
-        { "dense6", xui::filled::DENSE6 },
-        { "dense7", xui::filled::DENSE7 },
-        { "horizontal", xui::filled::HORIZONTAL },
-        { "vertical", xui::filled::VERTICAL },
-        { "cross", xui::filled::CROSS },
-        { "forward", xui::filled::FORWARD },
-        { "backward", xui::filled::BACKWARD },
-        { "diagcross", xui::filled::DIAGCROSS },
-        { "linear", xui::filled::LINEAR_GRADIENT },
-        { "texture", xui::filled::TEXTURE },
-
-        // alignment
-        { "left", xui::alignment_flag::ALIGN_LEFT },
-        { "right", xui::alignment_flag::ALIGN_RIGHT },
-        { "top", xui::alignment_flag::ALIGN_TOP },
-        { "bottom", xui::alignment_flag::ALIGN_BOTTOM },
-        { "center", xui::alignment_flag::ALIGN_CENTER },
-        { "vcenter", xui::alignment_flag::ALIGN_VCENTER },
-        { "hcenter", xui::alignment_flag::ALIGN_HCENTER },
-        { "left top", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_TOP },
-        { "top left", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_TOP },
-        { "left bottom", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_BOTTOM },
-        { "bottom left", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_BOTTOM },
-        { "right top", xui::alignment_flag::ALIGN_RIGHT | xui::alignment_flag::ALIGN_TOP },
-        { "top right", xui::alignment_flag::ALIGN_RIGHT | xui::alignment_flag::ALIGN_TOP },
-        { "right bottom", xui::alignment_flag::ALIGN_RIGHT | xui::alignment_flag::ALIGN_BOTTOM },
-        { "bottom right", xui::alignment_flag::ALIGN_RIGHT | xui::alignment_flag::ALIGN_BOTTOM },
-        { "left vcenter", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_VCENTER },
-        { "vcenter left", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_VCENTER },
-        { "right vcenter", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_VCENTER },
-        { "vcenter right", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_VCENTER },
-        { "top hcenter", xui::alignment_flag::ALIGN_TOP | xui::alignment_flag::ALIGN_HCENTER },
-        { "hcenter top", xui::alignment_flag::ALIGN_TOP | xui::alignment_flag::ALIGN_HCENTER },
-        { "bottom hcenter", xui::alignment_flag::ALIGN_BOTTOM | xui::alignment_flag::ALIGN_HCENTER },
-        { "hcenter bottom", xui::alignment_flag::ALIGN_BOTTOM | xui::alignment_flag::ALIGN_HCENTER },
-        { "vcenter hcenter", xui::alignment_flag::ALIGN_CENTER },
-        { "hcenter vcenter", xui::alignment_flag::ALIGN_CENTER },
-
-        // direction
-        { "ltr", (std::uint32_t)xui::direction::LEFT_RIGHT },
-        { "rtl", (std::uint32_t)xui::direction::RIGHT_LEFT },
-        { "ttb", (std::uint32_t)xui::direction::TOP_BOTTOM },
-        { "btt", (std::uint32_t)xui::direction::BOTTOM_TOP },
-        { "left right", (std::uint32_t)xui::direction::LEFT_RIGHT },
-        { "right left", (std::uint32_t)xui::direction::RIGHT_LEFT },
-        { "top bottom", (std::uint32_t)xui::direction::TOP_BOTTOM },
-        { "bottom top", (std::uint32_t)xui::direction::BOTTOM_TOP },
-        { "left to right", (std::uint32_t)xui::direction::LEFT_RIGHT },
-        { "right to left", (std::uint32_t)xui::direction::RIGHT_LEFT },
-        { "top to bottom", (std::uint32_t)xui::direction::TOP_BOTTOM },
-        { "bottom to top", (std::uint32_t)xui::direction::BOTTOM_TOP },
-    };
-    return style_flags;
-}
-
-std::map<std::string_view, std::uint32_t> & xui::style::colors()
-{
-    static std::map<std::string_view, std::uint32_t> style_colors =
-    {
-        {"transparent", 0x00000000 },
-        { "maroon", 0x800000FF },
-        { "darkred", 0x8B0000FF },
-        { "brown", 0xA52A2AFF },
-        { "firebrick", 0xB22222FF },
-        { "crimson", 0xDC143CFF },
-        { "red", 0xFF0000FF },
-        { "mediumvioletred", 0xC71585FF },
-        { "palevioletred", 0xD87093FF },
-        { "deeppink", 0xFF1493FF },
-        { "fuchsia", 0xFF00FFFF },
-        { "magenta", 0xFF00FFFF },
-        { "hotpink", 0xFF69B4FF },
-        { "pink", 0xFFC0CBFF },
-        { "lightpink", 0xFFB6C1FF },
-        { "mistyrose", 0xFFE4E1FF },
-        { "lavenderblush", 0xFFF0F5FF },
-        { "indigo", 0x4B0082FF },
-        { "purple", 0x800080FF },
-        { "darkmagenta", 0x8B008BFF },
-        { "darkorchid", 0x9932CCFF },
-        { "blue", 0x0000FFFF },
-        { "blueviolet", 0x8A2BE2FF },
-        { "darkviolet", 0x9400D3FF },
-        { "slateblue", 0x6A5ACDFF },
-        { "mediumpurple", 0x9370DBFF },
-        { "mediumslateblue", 0x7B68EEFF },
-        { "mediumorchid", 0xBA55D3FF },
-        { "violet", 0xEE82EEFF },
-        { "plum", 0xDDA0DDFF },
-        { "thistle", 0xD8BFD8FF },
-        { "lavender", 0xE6E6FAFF },
-        { "saddlebrown", 0x8B4513FF },
-        { "sienna", 0xA0522DFF },
-        { "chocolate", 0xD2691EFF },
-        { "indianred", 0xCD5C5CFF },
-        { "rosybrown", 0xBC8F8FFF },
-        { "lightcorol", 0xF08080FF },
-        { "salmon", 0xFA8072FF },
-        { "lightsalmon", 0xFFA07AFF },
-        { "orangered", 0xFF4500FF },
-        { "tomato", 0xFF6347FF },
-        { "coral", 0xFF7F50FF },
-        { "darkorange", 0xFF8C00FF },
-        { "sandybrown", 0xF4A460FF },
-        { "peru", 0xCD853FFF },
-        { "tan", 0xD2B48CFF },
-        { "burlywood", 0xDEB887FF },
-        { "wheat", 0xF5DEB3FF },
-        { "moccasin", 0xFFE4B5FF },
-        { "navajowhite", 0xFFDEADFF },
-        { "peachpuff", 0xFFDAB9FF },
-        { "bisque", 0xFFE4C4FF },
-        { "antuquewhite", 0xFAEBD7FF },
-        { "papayawhip", 0xFFEFD5FF },
-        { "cornsilk", 0xFFF8DCFF },
-        { "oldlace", 0xFDF5E6FF },
-        { "linen", 0xFAF0E6FF },
-        { "seashell", 0xFFF5EEFF },
-        { "snow", 0xFFFAFAFF },
-        { "floralwhite", 0xFFFAF0FF },
-        { "ivory", 0xFFFFF0FF },
-        { "mintcream", 0xF5FFFAFF },
-        { "darkgoldenrod", 0xB8860BFF },
-        { "goldenrod", 0xDAA520FF },
-        { "gold", 0xFFD700FF },
-        { "yellow", 0xFFFF00FF },
-        { "darkkhaki", 0xBDB76BFF },
-        { "khaki", 0xF0E68CFF },
-        { "palegoldenrod", 0xEEE8AAFF },
-        { "beige", 0xF5F5DCFF },
-        { "lemonchiffon", 0xFFFACDFF },
-        { "lightgoldenrodyellow", 0xFAFAD2FF },
-        { "lightyellow", 0xFFFFE0FF },
-        { "darkslategray", 0x2F4F4FFF },
-        { "darkolivegreen", 0x556B2FFF },
-        { "olive", 0x808000FF },
-        { "darkgreen", 0x006400FF },
-        { "forestgreen", 0x228B22FF },
-        { "seagreen", 0x2E8B57FF },
-        { "green", 0x008080FF },
-        { "teal", 0x008080FF },
-        { "lightseagreen", 0x20B2AAFF },
-        { "madiumaquamarine", 0x66CDAAFF },
-        { "mediumseagreen", 0x3CB371FF },
-        { "darkseagreen", 0x8FBC8FFF },
-        { "yellowgreen", 0x9ACD32FF },
-        { "limegreen", 0x32CD32FF },
-        { "lime", 0x00FF00FF },
-        { "chartreuse", 0x7FFF00FF },
-        { "lawngreen", 0x7CFC00FF },
-        { "greenyellow", 0xADFF2FFF },
-        { "mediumspringgreen", 0x00FA9AFF },
-        { "springgreen", 0x00FF7FFF },
-        { "lightgreen", 0x90EE90FF },
-        { "palegreen", 0x98F898FF },
-        { "aquamarine", 0x7FFFD4FF },
-        { "honeydew", 0xF0FFF0FF },
-        { "midnightblue", 0x191970FF },
-        { "navy", 0x000080FF },
-        { "darkblue", 0x00008BFF },
-        { "darkslateblue", 0x483D8BFF },
-        { "mediumblue", 0x0000CDFF },
-        { "royalblue", 0x4169E1FF },
-        { "dodgerblue", 0x1E90FFFF },
-        { "cornflowerblue", 0x6495EDFF },
-        { "deepskyblue", 0x00BFFFFF },
-        { "lightskyblue", 0x87CEFAFF },
-        { "lightsteelblue", 0xB0C4DEFF },
-        { "lightblue", 0xADD8E6FF },
-        { "steelblue", 0x4682B4FF },
-        { "darkcyan", 0x008B8BFF },
-        { "cadetblue", 0x5F9EA0FF },
-        { "darkturquoise", 0x00CED1FF },
-        { "mediumturquoise", 0x48D1CCFF },
-        { "turquoise", 0x40E0D0FF },
-        { "skyblue", 0x87CECBFF },
-        { "powderblue", 0xB0E0E6FF },
-        { "paleturquoise", 0xAFEEEEFF },
-        { "lightcyan", 0xE0FFFFFF },
-        { "azure", 0xF0FFFFFF },
-        { "aliceblue", 0xF0F8FFFF },
-        { "aqua", 0x00FFFFFF },
-        { "cyan", 0x00FFFFFF },
-        { "black", 0x000000FF },
-        { "dimgray", 0x696969FF },
-        { "gray", 0x808080FF },
-        { "slategray", 0x708090FF },
-        { "lightslategray", 0x778899FF },
-        { "darkgray", 0xA9A9A9FF },
-        { "silver", 0xC0C0C0FF },
-        { "lightgray", 0xD3D3D3FF },
-        { "gainsboro", 0xDCDCDCFF },
-        { "whitesmoke", 0xF5F5F5FF },
-        { "ghostwhite", 0xF8F8FFFF },
-        { "white", 0xFFFFFFFF }
-    };
-    return style_colors;
-}
-
-std::map<std::string_view, std::function<xui::style::variant( std::string_view::iterator &, std::string_view::iterator )>> & xui::style::functions()
-{
-    static std::map<std::string_view, std::function<xui::style::variant( std::string_view::iterator &, std::string_view::iterator )>> style_functions =
-    {
-        {"url", xui::style::parse_url },
-        {"rgb", xui::style::parse_rgb },
-        {"rgba", xui::style::parse_rgba },
-        {"vec2", xui::style::parse_vec2 },
-        {"vec4", xui::style::parse_vec4 },
-        {"dark", xui::style::parse_dark },
-        {"light", xui::style::parse_light },
-        {"hatch", xui::style::parse_hatch },
-        {"sample", xui::style::parse_sample },
-        {"linear", xui::style::parse_linear },
-        {"stroke", xui::style::parse_stroke },
-        {"border", xui::style::parse_border },
-        {"filled", xui::style::parse_filled },
-    };
-    return style_functions;
+    static std::map<std::string_view, xui::style::meta_struct *> map;
+    return map;
 }
 
 struct xui::context::private_p

@@ -8,13 +8,13 @@ static float hscollbar_value = 0;
 
 int main()
 {
+	auto & map = xui::style::meta_struct_map();
+	 
+
 	xui::context ctx;
 	gdi_implement imp;
 	xui::style style;
 	style.parse( xui::context::dark_style() );
-
-	std::vector<xui::url> urls;
-	style.get_values<xui::url>( urls );
 
 	imp.init();
 	ctx.init( &imp );
