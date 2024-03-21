@@ -10,252 +10,11 @@
 #define XUI_ERR( CODE )  if ( _p->_error ) _p->_error( this, xui_category::make_error_code( xui::err::CODE ) );
 #define XUI_SCALE( VAL ) ( VAL * _p->_factor )
 
-std::string_view data;
-
-namespace xui
-{
-    using string = std::string;
-    
-    BEG_STRUCT( bool )
-        CONSTRUCT( *object = data == "true"; );
-    END_STRUCT( bool )
-
-    BEG_STRUCT( int )
-        CONSTRUCT( std::from_chars( data.data(), data.data() + data.size(), *object ); );
-    END_STRUCT( int )
-
-    BEG_STRUCT( float )
-        CONSTRUCT( std::from_chars( data.data(), data.data() + data.size(), *object ); );
-    END_STRUCT( float )
-
-    BEG_STRUCT( string )
-        CONSTRUCT( object->assign( data.begin(), data.end() ); );
-    END_STRUCT( string )
-
-    BEG_STRUCT( url )
-        CONSTRUCT( *object = data; );
-    END_STRUCT( url )
-
-    BEG_STRUCT( size )
-        CONSTRUCT(
-        {
-            auto beg = data.begin();
-            auto end = data.end();
-            if ( data.find( ' ' ) != std::string_view::npos )
-                end = data.begin() + data.find( ' ' );
-            std::from_chars( beg.operator->(), end.operator->(), object->w );
-
-            if ( end == data.end() )
-                return;
-            beg = end + 1;
-            end = data.end();
-            std::from_chars( beg.operator->(), end.operator->(), object->h );
-        } );
-        PROP( w, std::from_chars( data.data(), data.data() + data.size(), object->w ); )
-        PROP( h, std::from_chars( data.data(), data.data() + data.size(), object->h ); )
-    END_STRUCT( size )
-
-    BEG_STRUCT( rect )
-        CONSTRUCT(
-        {
-            auto beg = data.begin();
-            auto end = data.end();
-            if ( data.find( ' ' ) != std::string_view::npos )
-                end = data.begin() + data.find( ' ' );
-
-            std::from_chars( beg.operator->(), end.operator->(), object->x );
-
-            if ( end == data.end() )
-                return;
-            beg = end + 1;
-            end = data.end();
-            std::from_chars( beg.operator->(), end.operator->(), object->y );
-
-            if ( end == data.end() )
-                return;
-            beg = end + 1;
-            end = data.end();
-            std::from_chars( beg.operator->(), end.operator->(), object->w );
-
-            if ( end == data.end() )
-                return;
-            beg = end + 1;
-            end = data.end();
-            std::from_chars( beg.operator->(), end.operator->(), object->h );
-        } );
-        PROP( x, std::from_chars( data.data(), data.data() + data.size(), object->x ); )
-        PROP( y, std::from_chars( data.data(), data.data() + data.size(), object->y ); )
-        PROP( w, std::from_chars( data.data(), data.data() + data.size(), object->w ); )
-        PROP( h, std::from_chars( data.data(), data.data() + data.size(), object->h ); )
-    END_STRUCT( rect )
-            
-    BEG_STRUCT( vec2 )
-        CONSTRUCT(
-        {
-            auto beg = data.begin();
-            auto end = data.end();
-            if ( data.find( ' ' ) != std::string_view::npos )
-                end = data.begin() + data.find( ' ' );
-            std::from_chars( beg.operator->(), end.operator->(), object->x );
-
-            if ( end == data.end() ) return;
-            beg = end + 1;
-            end = data.end();
-            std::from_chars( beg.operator->(), end.operator->(), object->y );
-        } );
-        PROP( x, std::from_chars( data.data(), data.data() + data.size(), object->x ); )
-        PROP( y, std::from_chars( data.data(), data.data() + data.size(), object->y ); )
-    END_STRUCT( vec2 )
-            
-    BEG_STRUCT( vec4 )
-        CONSTRUCT(
-        {
-            auto beg = data.begin();
-            auto end = data.end();
-            if ( data.find( ' ' ) != std::string_view::npos )
-                end = data.begin() + data.find( ' ' );
-
-            std::from_chars( beg.operator->(), end.operator->(), object->x );
-
-            if ( end == data.end() ) return;
-            beg = end + 1;
-            end = data.end();
-            std::from_chars( beg.operator->(), end.operator->(), object->y );
-
-            if ( end == data.end() ) return;
-            beg = end + 1;
-            end = data.end();
-            std::from_chars( beg.operator->(), end.operator->(), object->z );
-
-            if ( end == data.end() ) return;
-            beg = end + 1;
-            end = data.end();
-            std::from_chars( beg.operator->(), end.operator->(), object->w );
-        } );
-        PROP( x, std::from_chars( data.data(), data.data() + data.size(), object->x ); )
-        PROP( y, std::from_chars( data.data(), data.data() + data.size(), object->y ); )
-        PROP( z, std::from_chars( data.data(), data.data() + data.size(), object->z ); )
-        PROP( w, std::from_chars( data.data(), data.data() + data.size(), object->w ); )
-    END_STRUCT( vec4 )
-            
-    BEG_STRUCT( color )
-        CONSTRUCT(
-        {
-            if ( data.front() == '#' )
-            {
-                std::from_chars( data.data() + 1, data.data() + data.size(), object->hex, 16 );
-            }
-            else if ( data.find( "rgba" ) != std::string_view::npos )
-            {
-                auto beg = data.begin() + data.find( '(' ) + 1;
-                auto end = data.begin() + data.find( ',' );
-                std::from_chars( beg.operator->(), end.operator->(), object->r );
-
-                beg = end + 1;
-                end = data.begin() + data.find( ',', std::distance( data.begin(), beg ) );
-                std::from_chars( beg.operator->(), end.operator->(), object->g );
-
-                beg = end + 1;
-                end = data.begin() + data.find( ',', std::distance( data.begin(), beg ) );
-                std::from_chars( beg.operator->(), end.operator->(), object->b );
-
-                beg = end + 1;
-                end = data.begin() + data.find( ')', std::distance( data.begin(), beg ) );
-                std::from_chars( beg.operator->(), end.operator->(), object->a );
-            }
-            else if ( data.find( "rgb" ) != std::string_view::npos )
-            {
-                auto beg = data.begin() + data.find( '(' ) + 1;
-                auto end = data.begin() + data.find( ',' );
-                std::from_chars( beg.operator->(), end.operator->(), object->r );
-
-                beg = end + 1;
-                end = data.begin() + data.find( ',', std::distance( data.begin(), beg ) );
-                std::from_chars( beg.operator->(), end.operator->(), object->g );
-
-                beg = end + 1;
-                end = data.begin() + data.find( ')', std::distance( data.begin(), beg ) );
-                std::from_chars( beg.operator->(), end.operator->(), object->b );
-            }
-        } );
-        PROP( r, std::from_chars( data.data(), data.data() + data.size(), object->r ); )
-        PROP( g, std::from_chars( data.data(), data.data() + data.size(), object->g ); )
-        PROP( b, std::from_chars( data.data(), data.data() + data.size(), object->b ); )
-        PROP( a, std::from_chars( data.data(), data.data() + data.size(), object->a ); )
-    END_STRUCT( color )
-            
-    BEG_STRUCT( hatch )
-        CONSTRUCT( {} );
-        PROP_TYPE( fore_color, color )
-        PROP_TYPE( back_color, color )
-    END_STRUCT( hatch )
-
-    BEG_STRUCT( linear )
-        CONSTRUCT( {} );
-        PROP_TYPE( p1, vec2 )
-        PROP_TYPE( c1, color )
-        PROP_TYPE( p1, vec2 )
-        PROP_TYPE( c2, color )
-    END_STRUCT( linear )
-            
-    BEG_STRUCT( stroke )
-        CONSTRUCT( {} );
-        PROP( style,
-        {
-            switch ( xui::hash( data.data() ) )
-            {
-            case xui::hash( "solid" ): object->style = xui::stroke::SOLID; break;
-            case xui::hash( "dashed" ): object->style = xui::stroke::DASHED; break;
-            case xui::hash( "dotted" ): object->style = xui::stroke::DOTTED; break;
-            case xui::hash( "dash_dot" ): object->style = xui::stroke::DASH_DOT; break;
-            case xui::hash( "dash_dot_dot" ): object->style = xui::stroke::DASH_DOT_DOT; break;
-            }
-        } )
-        PROP_TYPE( width, float )
-        PROP_TYPE( color, color )
-    END_STRUCT( stroke )
-
-    BEG_STRUCT( border, stroke )
-        CONSTRUCT( {} );
-        PROP_TYPE( radius, vec4 )
-    END_STRUCT( border )
-
-    BEG_ENUM( direction )
-        VALUE( "ltr", direction::LEFT_RIGHT )
-        VALUE( "rtl", direction::RIGHT_LEFT )
-        VALUE( "left to right", direction::LEFT_RIGHT )
-        VALUE( "right to left", direction::RIGHT_LEFT )
-        VALUE( "top to bottom", direction::TOP_BOTTOM )
-        VALUE( "bottom to top", direction::BOTTOM_TOP )
-    END_ENUM( direction )
-
-    BEG_ENUM( orientation )
-        VALUE( "top", orientation::ORIENT_TOP )
-        VALUE( "left", orientation::ORIENT_LEFT )
-        VALUE( "right", orientation::ORIENT_RIGHT )
-        VALUE( "bottom", orientation::ORIENT_BOTTOM )
-    END_ENUM( orientation )
-
-    BEG_FLAGS( alignment_flag )
-        FLAG( "left", alignment_flag::ALIGN_LEFT )
-        FLAG( "right", alignment_flag::ALIGN_RIGHT )
-        FLAG( "top", alignment_flag::ALIGN_TOP )
-        FLAG( "bottom", alignment_flag::ALIGN_BOTTOM )
-        FLAG( "vcenter", alignment_flag::ALIGN_VCENTER )
-        FLAG( "hcenter", alignment_flag::ALIGN_HCENTER )
-        FLAG( "center", alignment_flag::ALIGN_CENTER )
-    END_FLAGS( alignment_flag )
-
-    BEG_CLASS( window );
-        ATTR( filled, color )
-        BEG_ELEMENT( title )
-            ATTR( filled, color )
-        END_ELEMENT( title )
-    END_CLASS( window );
-}
-
 namespace
 {
+    static constexpr int action_nil_type = 0;
+    static constexpr int action_menu_type = 1;
+    static constexpr int action_focus_type = 2;
     static std::regex int_regex{ R"([-+]?([0-9]*[0-9]+))" };
     static std::regex flt_regex{ R"([-+]?([0-9]*.[0-9]+|[0-9]+))" };
 
@@ -298,10 +57,13 @@ namespace
     };
     struct focus_type
     {
+        int type = 0;
+        xui::rect rect;
         std::string name;
         xui::window_id id = xui::invalid_id;
         xui::event event = xui::event::EVENT_MAX_COUNT;
     };
+
     struct window_type
     {
         int flags;
@@ -318,7 +80,7 @@ template<> struct std::formatter< std::span<std::string_view, std::dynamic_exten
         auto result = context.out();
         for ( auto it : p )
         {
-            result = std::format_to( result, "-{}", it );
+            result = std::format_to( result, "{}", it );
         }
         return result;
     }
@@ -586,7 +348,7 @@ void xui::url::parse()
 
 xui::rect xui::rect::margins_added( float left, float right, float top, float bottom ) const
 {
-    return { x - left, y - top, w + left + right, h + top + bottom };
+    return { x + left, y + top, w - left + right, h - top + bottom };
 }
 
 xui::color::color()
@@ -633,258 +395,719 @@ xui::color xui::color::lerp( const xui::color & target, float t ) const
     };
 }
 
-void xui::style::meta_struct::_calc_construct( const meta_struct & _m, void * _o, std::string_view _d )
+
+
+
+xui::style::style( std::pmr::memory_resource * res )
+    : _selectors( res )
 {
-    std::array<std::string_view, 10> list;
 
-    uint32_t * object = (uint32_t *)( _o );
-
-    size_t i = 0;
-    auto beg = _d.begin();
-    auto it = _d.begin();
-    for ( size_t i = 0; i < list.size() && it != _d.end(); i++ )
-    {
-        while ( it != _d.end() && ( *it ) != '|' ) ++it;
-        auto it2 = it;
-        while ( *beg == ' ' ) ++beg;
-        while ( *it == ' ' ) --it;
-
-        list[i] = { beg, it };
-
-        if ( it2 != _d.end() ) it = it2 + 1;
-    }
-
-    for ( size_t i = 0; i < list.size() && !list[i].empty(); i++ )
-    {
-        auto it = std::find_if( _m.propertys.begin(), _m.propertys.end(), [&]( const auto & prop ) { return ( prop.name == list[i] ); } );
-        if ( it != _m.propertys.end() )
-        {
-            uint32_t p = 0; it->setter( &p, list[i] );
-            *object |= p;
-        }
-    }
 }
 
 bool xui::style::parse( std::string_view str )
 {
-    _data = str;
+    _selectors.clear();
 
+    bool result = true;
+    std::string name;
+    auto beg = str.begin();
+    auto end = str.end();
 
-
-    return false;
-}
-
-bool xui::style::find( std::string_view name, std::string_view attr, void * object ) const
-{
-    // {id}#{class}-{element}-{element}:{status}
-    std::string_view id, cls, stat;
-    std::vector<std::string_view> elems;
+    while ( beg != end )
     {
-        auto beg = name.begin();
-        auto end = name.end();
-        // id
-        if ( name.find( '#' ) != std::string_view::npos )
+        if ( std::isspace( *beg ) )
         {
-            end = name.begin() + name.find( '#' );
-            id = { beg, end };
-            beg = end + 1;
-            end = end + 1;
+            ++beg;
         }
-        // class
-        if ( name.find( '-' ) != std::string_view::npos )
+        else if ( *beg == '{' )
         {
-            end = name.begin() + name.find( '-' );
-            cls = { beg, end };
-            beg = end + 1;
-            end = end + 1;
+            _selectors.insert( { name, parse_selector( beg, end ) } );
+            name.clear();
         }
-        else if ( name.find( ':' ) != std::string_view::npos )
+        else if ( *beg == ',' )
         {
-            end = name.begin() + name.find( ':' );
-            cls = { beg, end };
-            beg = end + 1;
-            end = end + 1;
+            ++beg;
         }
         else
         {
-            end = name.end();
-            cls = { beg, end };
-            beg = end;
-        }
-        // elements
-        if ( name.find( '-' ) != std::string_view::npos )
-        {
-            if ( name.find( ':' ) != std::string_view::npos )
-                end = name.begin() + name.find( ':' );
-            else
-                end = name.end();
-
-            while ( beg != end )
-            {
-                auto it = beg;
-                while ( it != end && *it != '-' ) ++it;
-                elems.push_back( { beg, it } );
-                beg = it + 1;
-            }
-        }
-        // status
-        if ( name.find( ':' ) != std::string_view::npos )
-        {
-            end = name.end();
-            stat = { beg, end };
+            name.push_back( *beg++ );
         }
     }
 
-    // {id}#{class}-{element}-{element}:{status}
-    auto it = _selectors.find( std::format( "{}#{}{}:{}", id, cls, elems, stat ) );
-    if ( it != _selectors.end() )
+    return result;
+}
+
+xui::style::variant xui::style::find( std::string_view name ) const
+{
+    // {id}#{type}-{element}-{element}-{element}:{action}@{attr}
+    std::string_view type, action, id, attr;
+    std::pmr::vector<std::string_view> elements( _selectors.get_allocator().resource() );
+
+
+    // {id}
+    if ( name.find( '#' ) != std::string_view::npos )
     {
-        auto it2 = it->second.attributes.find( attr );
-        if ( it2 != it->second.attributes.end() )
-        {
-            return find( it->second, it2->second, it->second.element, object );
-        }
+        id = { name.begin(), name.begin() + name.find( '#' ) + 1 };
+        name = { name.begin() + name.find( '#' ) + 1, name.end() };
     }
-    // {id}#{class}-{element}-{element}
-    auto it = _selectors.find( std::format( "{}#{}{}", id, cls, elems ) );
-    if ( it != _selectors.end() )
+    // {attr}
+    if ( name.find( '@' ) != std::string_view::npos )
     {
-        auto it2 = it->second.attributes.find( attr );
-        if ( it2 != it->second.attributes.end() )
-        {
-            return find( it->second, it2->second, it->second.element, object );
-        }
+        attr = { name.begin() + name.find( '@' ) + 1, name.end() };
+        name = { name.begin(), name.begin() + name.find( '@' ) };
     }
-    // #{class}-{element}-{element}
-    auto it = _selectors.find( std::format( "#{}{}", cls, elems ) );
-    if ( it != _selectors.end() )
+    // {action}
+    if ( name.find( ':' ) != std::string_view::npos )
     {
-        auto it2 = it->second.attributes.find( attr );
-        if ( it2 != it->second.attributes.end() )
-        {
-            return find( it->second, it2->second, it->second.element, object );
-        }
+        action = { name.begin() + name.find( ':' ), name.end() };
+        name = { name.begin(), name.begin() + name.find( ':' ) };
     }
-    // #{class}-{element}
-    while( !elems.empty() )
+    // {element}
+    while ( name.find( '-' ) != std::string_view::npos )
     {
-        auto it = _selectors.find( std::format( "#{}{}", id, cls, elems ) );
-        if ( it != _selectors.end() )
+        elements.insert( elements.begin(), { name.begin() + name.find_last_of( '-' ), name.end() } );
+        name = { name.begin(), name.begin() + name.find_last_of( '-' ) };
+    }
+    // {type}
+    if ( !name.empty() )
+    {
+        type = name;
+    }
+
+    std::optional<xui::style::variant> opt;
+
+    // {id}#{type}-{element}-{element}-{element}:{action}@{attr}
+    opt = find( std::format( "{}{}{}{}", id, type, std::span<std::string_view>{ elements }, action ), attr );
+    if ( opt.has_value() && opt.value().index() != variant::inherit_idx )
+    {
+        return opt.value();
+    }
+
+    // {type}-{element}-{element}-{element}:{action}@{attr}
+    opt = find( std::format( "{}{}{}", type, std::span<std::string_view>{ elements }, action ), attr );
+    if ( opt.has_value() && opt.value().index() != variant::inherit_idx )
+    {
+        return opt.value();
+    }
+
+    // {type}-{element}-{element}-{element}@{attr}
+    opt = find( std::format( "{}{}", type, std::span<std::string_view>{ elements } ), attr );
+    if ( opt.has_value() && opt.value().index() != variant::inherit_idx )
+    {
+        return opt.value();
+    }
+
+    // {type}-{element}-{element}@{attr}
+    // {type}-{element}@{attr}
+    if ( !elements.empty() )
+    {
+        auto beg = elements.begin();
+        auto end = elements.end();
+
+        while ( beg != end )
         {
-            auto it2 = it->second.attributes.find( attr );
-            if ( it2 != it->second.attributes.end() )
+            opt = find( std::format( "{}{}", type, std::span<std::string_view>{ beg, end } ), attr );
+            if ( opt.has_value() && opt.value().index() != variant::inherit_idx )
             {
-                return find( it->second, it2->second, it->second.element, object );
+                return opt.value();
             }
-        }
-        elems.pop_back();
-    }
-    // #{class}
-    auto it = _selectors.find( std::format( "#{}", cls ) );
-    if ( it != _selectors.end() )
-    {
-        auto it2 = it->second.attributes.find( attr );
-        if ( it2 != it->second.attributes.end() )
-        {
-            return find( it->second, it2->second, it->second.element, object );
+
+            --end;
         }
     }
-    // #
-    auto it = _selectors.find( "#" );
-    if ( it != _selectors.end() )
+
+    // {type}@{attr}
+    opt = find( { type.begin(), type.end() }, attr );
+    if ( opt.has_value() && opt.value().index() != variant::inherit_idx )
     {
-        auto it2 = it->second.attributes.find( attr );
-        if ( it2 != it->second.attributes.end() )
-        {
-            return find( it->second, it2->second, it->second.element, object );
-        }
+        return opt.value();
+    }
+
+    // *@{attr}
+    opt = find( "*", attr );
+    if ( opt.has_value() && opt.value().index() != variant::inherit_idx )
+    {
+        return opt.value();
     }
 
 
     return {};
 }
 
-bool xui::style::find( const selector & select, const selector::attribute & attr, const meta_element * element, void * object ) const
+std::optional<xui::style::variant> xui::style::find( std::string_view type, std::string_view attr ) const
 {
-    if ( element == nullptr )
-        return false;
-
-    if ( attr.data == "inherit" )
+    auto it = _selectors.find( { type.begin(), type.end() } );
+    if ( it != _selectors.end() )
     {
-        return find( select, attr, element->parent, object );
-    }
-
-    auto it = std::find_if( element->attributes.begin(), element->attributes.end(), [&attr]( const auto & val ) { return attr.name == val.name; } );
-    if ( it != element->attributes.end() )
-    {
-        if( auto meta = find_struct( it->type ) )
+        auto it2 = it->second.attrs.find( { attr.begin(), attr.end() } );
+        if ( it2 != it->second.attrs.end() )
         {
-            meta->construct( object, attr.data );
-
-            for ( const auto & prop : meta->propertys )
+            if ( it2->second.index() == xui::style::variant::inherit_idx )
             {
-                auto it2 = select.attributes.find( std::format( "{}-{}", attr.name, prop.name ) );
-                if ( it2 != select.attributes.end() )
-                {
-                    find( select, it2->second, element, prop, object );
-                }
+                int i = 0;
             }
+            return it2->second;
+        }
+    }
+    return {};
+}
 
-            return true;
+xui::style::selector xui::style::parse_selector( std::string_view::iterator & beg, std::string_view::iterator end )
+{
+    _ASSERT( *beg++ == '{' && "" );
+
+    std::string name;
+    xui::style::selector select;
+
+    while ( beg != end )
+    {
+        if ( std::isspace( *beg ) )
+        {
+            ++beg;
+        }
+        else if ( *beg == ':' )
+        {
+            ++beg;
+            select.attrs.insert( { name, parse_attribute( beg, end ) } );
+            name.clear();
+        }
+        else if( *beg == ';' )
+        {
+            ++beg;
+            name.clear();
+        }
+        else if ( *beg == '}' )
+        {
+            ++beg;
+            return select;
+        }
+        else
+        {
+            name.push_back( *beg++ );
         }
     }
 
-    return false;
+    return select;
 }
 
-bool xui::style::find( const selector & select, const selector::attribute & attr, const meta_element * element, const meta_property & prop, void * object ) const
+xui::style::variant xui::style::parse_attribute( std::string_view::iterator & beg, std::string_view::iterator end )
 {
-    if ( element == nullptr )
-        return false;
+    std::string value;
 
-    if ( attr.data == "inherit" )
+    while ( beg != end )
     {
-        return find( select, attr, element->parent, prop, object );
+        if ( value.empty() && std::isspace( *beg ) )
+        {
+            ++beg;
+        }
+        else if ( *beg == '#' )
+        {
+            return parse_hex( beg, end );
+        }
+        else if ( *beg == '(' )
+        {
+            if ( functions().find( value ) != functions().end() )
+            {
+                return functions()[value]( beg, end );
+            }
+            else
+            {
+                break;
+            }
+        }
+        else if ( *beg == ',' || *beg == ';' || *beg == ')' )
+        {
+            ++beg;
+
+            while ( std::isspace( value.back() ) ) value.pop_back();
+
+            if ( value == "inherit" )
+            {
+                return xui::style::inherit();
+            }
+            else if ( std::regex_match( value, int_regex ) )
+            {
+                return std::stoi( value );
+            }
+            else if ( std::regex_match( value, flt_regex ) )
+            {
+                return std::stof( value );
+            }
+            else if ( flags().find( value ) != flags().end() )
+            {
+                return flags()[value];
+            }
+            else if ( colors().find( value ) != colors().end() )
+            {
+                return xui::color( colors()[value] );
+            }
+            else
+            {
+                break;
+            }
+        }
+        else
+        {
+            value.push_back( *beg++ );
+        }
     }
 
-    prop.setter( object, attr.data );
-
-    return true;
+    return value;
 }
 
-void xui::style::register_class( meta_class * cls )
+xui::color xui::style::parse_light( std::string_view::iterator & beg, std::string_view::iterator end )
 {
-    meta_class_map().insert( { cls->name, cls } );
+    _ASSERT( *beg++ == '(' && "" );
+
+    return parse_attribute( beg, end ).value<xui::color>().light();
 }
 
-void xui::style::register_struct( meta_struct * str )
+xui::color xui::style::parse_dark( std::string_view::iterator & beg, std::string_view::iterator end )
 {
-    meta_struct_map().insert( { str->name, str } );
+    _ASSERT( *beg++ == '(' && "" );
+
+    return parse_attribute( beg, end ).value<xui::color>().dark();
 }
 
-const xui::style::meta_class * xui::style::find_class( std::string_view name )
+xui::color xui::style::parse_rgba( std::string_view::iterator & beg, std::string_view::iterator end )
 {
-    auto it = meta_class_map().find( name );
-    return it != meta_class_map().end() ? it->second : nullptr;
+    _ASSERT( *beg++ == '(' && "" );
+
+    xui::color result;
+
+    result.r = parse_attribute( beg, end ).value<int>(); if (check<','>( beg, end ) ) ++beg;
+    result.g = parse_attribute( beg, end ).value<int>(); if (check<','>( beg, end ) ) ++beg;
+    result.b = parse_attribute( beg, end ).value<int>(); if (check<','>( beg, end ) ) ++beg;
+    result.a = parse_attribute( beg, end ).value<int>(); if (check<')'>( beg, end ) ) ++beg;
+
+    return result;
 }
 
-const xui::style::meta_struct * xui::style::find_struct( std::string_view name )
+xui::color xui::style::parse_rgb( std::string_view::iterator & beg, std::string_view::iterator end )
 {
-    auto it = meta_struct_map().find( name );
-    return it != meta_struct_map().end() ? it->second : nullptr;
+    _ASSERT( *beg++ == '(' && "" );
+
+    xui::color result;
+
+    result.r = parse_attribute( beg, end ).value<int>(); if ( check<','>( beg, end ) ) ++beg;
+    result.g = parse_attribute( beg, end ).value<int>(); if ( check<','>( beg, end ) ) ++beg;
+    result.b = parse_attribute( beg, end ).value<int>(); if ( check<')'>( beg, end ) ) ++beg;
+
+    return result;
 }
 
-std::map<std::string_view, xui::style::meta_class *> & xui::style::meta_class_map()
+xui::vec2 xui::style::parse_vec2( std::string_view::iterator & beg, std::string_view::iterator end )
 {
-    static std::map<std::string_view, xui::style::meta_class *> map;
-    return map;
+    _ASSERT( *beg++ == '(' && "" );
+
+    xui::vec2 result;
+
+    result.x = parse_attribute( beg, end ).value<float>(); if ( check<','>( beg, end ) ) ++beg;
+    result.y = parse_attribute( beg, end ).value<float>(); if ( check<')'>( beg, end ) ) ++beg;
+
+    return result;
 }
 
-std::map<std::string_view, xui::style::meta_struct *> & xui::style::meta_struct_map()
+xui::vec4 xui::style::parse_vec4( std::string_view::iterator & beg, std::string_view::iterator end )
 {
-    static std::map<std::string_view, xui::style::meta_struct *> map;
-    return map;
+    _ASSERT( *beg++ == '(' && "" );
+
+    xui::vec4 result;
+
+    result.x = parse_attribute( beg, end ).value<float>(); if ( check<','>( beg, end ) ) ++beg;
+    result.y = parse_attribute( beg, end ).value<float>(); if ( check<','>( beg, end ) ) ++beg;
+    result.z = parse_attribute( beg, end ).value<float>(); if ( check<','>( beg, end ) ) ++beg;
+    result.w = parse_attribute( beg, end ).value<float>(); if ( check<')'>( beg, end ) ) ++beg;
+
+    return result;
 }
+
+xui::color xui::style::parse_hex( std::string_view::iterator & beg, std::string_view::iterator end )
+{
+    _ASSERT( *beg++ == '#' && "" );
+
+    xui::color color;
+
+    auto it = beg;
+    while ( *it != ';' ) ++it;
+
+    std::from_chars( beg.operator->(), it.operator->(), color.hex, 16 );
+    beg = it;
+
+    return color;
+}
+
+xui::url xui::style::parse_url( std::string_view::iterator & beg, std::string_view::iterator end )
+{
+    _ASSERT( *beg++ == '(' && "" );
+
+    std::string result;
+
+    while ( beg != end && *beg != ')' )
+    {
+        if ( !std::isspace( *beg ) )
+            result.push_back( *beg++ );
+        else
+            ++beg;
+    }
+
+    check<')'>( beg, end );
+
+    return result;
+}
+
+xui::hatch_color xui::style::parse_hatch( std::string_view::iterator & beg, std::string_view::iterator end )
+{
+    _ASSERT( *beg++ == '(' && "" );
+
+    xui::hatch_color result;
+
+    result.fore = parse_attribute( beg, end ).value<xui::color>(); if ( check<','>( beg, end ) ) ++beg;
+    result.back = parse_attribute( beg, end ).value<xui::color>(); if ( check<')'>( beg, end ) ) ++beg;
+
+    return result;
+}
+
+xui::texture_brush xui::style::parse_sample( std::string_view::iterator & beg, std::string_view::iterator end )
+{
+    _ASSERT( *beg++ == '(' && "" );
+
+    xui::texture_brush result;
+
+    result.image = parse_attribute( beg, end ).value<xui::url>(); if ( check<','>( beg, end ) ) ++beg;
+    result.mode = parse_attribute( beg, end ).value<xui::texture_brush::warp>(); if ( check<')'>( beg, end ) ) ++beg;
+
+    return result;
+}
+
+xui::linear_gradient xui::style::parse_linear( std::string_view::iterator & beg, std::string_view::iterator end )
+{
+    _ASSERT( *beg++ == '(' && "" );
+
+    xui::linear_gradient result;
+
+    result.p1 = parse_attribute( beg, end ).value<xui::vec2>(); if ( check<','>( beg, end ) ) ++beg;
+    result.p2 = parse_attribute( beg, end ).value<xui::vec2>(); if ( check<','>( beg, end ) ) ++beg;
+    result.c1 = parse_attribute( beg, end ).value<xui::color>(); if ( check<','>( beg, end ) ) ++beg;
+    result.c2 = parse_attribute( beg, end ).value<xui::color>(); if ( check<')'>( beg, end ) ) ++beg;
+
+    return result;
+}
+
+xui::stroke xui::style::parse_stroke( std::string_view::iterator & beg, std::string_view::iterator end )
+{
+    _ASSERT( *beg++ == '(' && "" );
+
+    xui::stroke result;
+
+    result.style = parse_attribute( beg, end ).value<uint32_t>(); if ( check<','>( beg, end ) ) ++beg;
+    result.width = parse_attribute( beg, end ).value<float>(); if ( check<','>( beg, end ) ) ++beg;
+    result.color = parse_attribute( beg, end ).value<xui::color>(); if ( check<')'>( beg, end ) ) ++beg;
+
+    return result;
+}
+
+xui::border xui::style::parse_border( std::string_view::iterator & beg, std::string_view::iterator end )
+{
+    _ASSERT( *beg++ == '(' && "" );
+
+    xui::border result;
+
+    result.style = parse_attribute( beg, end ).value<uint32_t>(); if ( check<','>( beg, end ) ) ++beg;
+    result.width = parse_attribute( beg, end ).value<float>(); if ( check<','>( beg, end ) ) ++beg;
+    result.color = parse_attribute( beg, end ).value<xui::color>(); if ( check<','>( beg, end ) ) ++beg;
+    result.radius = parse_attribute( beg, end ).value<xui::vec4>(); if ( check<')'>( beg, end ) ) ++beg;
+
+    return result;
+}
+
+xui::filled xui::style::parse_filled( std::string_view::iterator & beg, std::string_view::iterator end )
+{
+    _ASSERT( *beg++ == '(' && "" );
+
+    xui::filled result;
+
+    result.style = parse_attribute( beg, end ).value<uint32_t>(); if ( check<','>( beg, end ) ) ++beg;
+    switch ( result.style )
+    {
+    case xui::filled::SOLID:
+        result.colors = parse_attribute( beg, end ).value<xui::color>(); if ( check<')'>( beg, end ) ) ++beg;
+        break;
+    case xui::filled::DENSE1:
+    case xui::filled::DENSE2:
+    case xui::filled::DENSE3:
+    case xui::filled::DENSE4:
+    case xui::filled::DENSE5:
+    case xui::filled::DENSE6:
+    case xui::filled::DENSE7:
+    case xui::filled::HORIZONTAL:
+    case xui::filled::VERTICAL:
+    case xui::filled::CROSS:
+    case xui::filled::FORWARD:
+    case xui::filled::BACKWARD:
+    case xui::filled::DIAGCROSS:
+        result.colors = parse_attribute( beg, end ).value<xui::hatch_color>(); if ( check<')'>( beg, end ) ) ++beg;
+        break;
+    case xui::filled::TEXTURE:
+        result.colors = parse_attribute( beg, end ).value<xui::texture_brush>(); if ( check<')'>( beg, end ) ) ++beg;
+        break;
+    case xui::filled::LINEAR_GRADIENT:
+        result.colors = parse_attribute( beg, end ).value<xui::linear_gradient>(); if ( check<')'>( beg, end ) ) ++beg;
+        break;
+    }
+
+    return result;
+}
+
+std::map<std::string_view, std::uint32_t> & xui::style::flags()
+{
+    static std::map<std::string_view, std::uint32_t> style_flags =
+    {
+        // texture_brush mode
+        { "tile", xui::texture_brush::warp::WRAP_TILE },
+        { "flipx", xui::texture_brush::warp::WRAP_TILEFLIPX },
+        { "flipy", xui::texture_brush::warp::WRAP_TILEFLIPY },
+        { "flipxy", xui::texture_brush::warp::WRAP_TILEFLIPXY },
+        { "clamp", xui::texture_brush::warp::WRAP_CLAMP },
+
+        // stroke filled share
+        { "solid", 0 }, // { "solid", xui::stroke::SOLID }, { "solid", xui::drawcmd::filled::SOLID },
+
+        // stroke style
+        { "dashed", xui::stroke::DASHED },
+        { "dotted", xui::stroke::DOTTED },
+        { "dashdot", xui::stroke::DASH_DOT },
+        { "dashdotdot", xui::stroke::DASH_DOT_DOT },
+
+        // filled style
+        { "dense1", xui::filled::DENSE1 },
+        { "dense2", xui::filled::DENSE2 },
+        { "dense3", xui::filled::DENSE3 },
+        { "dense4", xui::filled::DENSE4 },
+        { "dense5", xui::filled::DENSE5 },
+        { "dense6", xui::filled::DENSE6 },
+        { "dense7", xui::filled::DENSE7 },
+        { "horizontal", xui::filled::HORIZONTAL },
+        { "vertical", xui::filled::VERTICAL },
+        { "cross", xui::filled::CROSS },
+        { "forward", xui::filled::FORWARD },
+        { "backward", xui::filled::BACKWARD },
+        { "diagcross", xui::filled::DIAGCROSS },
+        { "linear", xui::filled::LINEAR_GRADIENT },
+        { "texture", xui::filled::TEXTURE },
+
+        // alignment
+        { "left", xui::alignment_flag::ALIGN_LEFT },
+        { "right", xui::alignment_flag::ALIGN_RIGHT },
+        { "top", xui::alignment_flag::ALIGN_TOP },
+        { "bottom", xui::alignment_flag::ALIGN_BOTTOM },
+        { "center", xui::alignment_flag::ALIGN_CENTER },
+        { "vcenter", xui::alignment_flag::ALIGN_VCENTER },
+        { "hcenter", xui::alignment_flag::ALIGN_HCENTER },
+        { "left top", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_TOP },
+        { "top left", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_TOP },
+        { "left bottom", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_BOTTOM },
+        { "bottom left", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_BOTTOM },
+        { "right top", xui::alignment_flag::ALIGN_RIGHT | xui::alignment_flag::ALIGN_TOP },
+        { "top right", xui::alignment_flag::ALIGN_RIGHT | xui::alignment_flag::ALIGN_TOP },
+        { "right bottom", xui::alignment_flag::ALIGN_RIGHT | xui::alignment_flag::ALIGN_BOTTOM },
+        { "bottom right", xui::alignment_flag::ALIGN_RIGHT | xui::alignment_flag::ALIGN_BOTTOM },
+        { "left vcenter", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_VCENTER },
+        { "vcenter left", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_VCENTER },
+        { "right vcenter", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_VCENTER },
+        { "vcenter right", xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_VCENTER },
+        { "top hcenter", xui::alignment_flag::ALIGN_TOP | xui::alignment_flag::ALIGN_HCENTER },
+        { "hcenter top", xui::alignment_flag::ALIGN_TOP | xui::alignment_flag::ALIGN_HCENTER },
+        { "bottom hcenter", xui::alignment_flag::ALIGN_BOTTOM | xui::alignment_flag::ALIGN_HCENTER },
+        { "hcenter bottom", xui::alignment_flag::ALIGN_BOTTOM | xui::alignment_flag::ALIGN_HCENTER },
+        { "vcenter hcenter", xui::alignment_flag::ALIGN_CENTER },
+        { "hcenter vcenter", xui::alignment_flag::ALIGN_CENTER },
+
+        // direction
+        { "ltr", (std::uint32_t)xui::direction::LEFT_RIGHT },
+        { "rtl", (std::uint32_t)xui::direction::RIGHT_LEFT },
+        { "ttb", (std::uint32_t)xui::direction::TOP_BOTTOM },
+        { "btt", (std::uint32_t)xui::direction::BOTTOM_TOP },
+        { "left right", (std::uint32_t)xui::direction::LEFT_RIGHT },
+        { "right left", (std::uint32_t)xui::direction::RIGHT_LEFT },
+        { "top bottom", (std::uint32_t)xui::direction::TOP_BOTTOM },
+        { "bottom top", (std::uint32_t)xui::direction::BOTTOM_TOP },
+        { "left to right", (std::uint32_t)xui::direction::LEFT_RIGHT },
+        { "right to left", (std::uint32_t)xui::direction::RIGHT_LEFT },
+        { "top to bottom", (std::uint32_t)xui::direction::TOP_BOTTOM },
+        { "bottom to top", (std::uint32_t)xui::direction::BOTTOM_TOP },
+    };
+    return style_flags;
+}
+
+std::map<std::string_view, std::uint32_t> & xui::style::colors()
+{
+    static std::map<std::string_view, std::uint32_t> style_colors =
+    {
+        {"transparent", 0x00000000 },
+        { "maroon", 0x800000FF },
+        { "darkred", 0x8B0000FF },
+        { "brown", 0xA52A2AFF },
+        { "firebrick", 0xB22222FF },
+        { "crimson", 0xDC143CFF },
+        { "red", 0xFF0000FF },
+        { "mediumvioletred", 0xC71585FF },
+        { "palevioletred", 0xD87093FF },
+        { "deeppink", 0xFF1493FF },
+        { "fuchsia", 0xFF00FFFF },
+        { "magenta", 0xFF00FFFF },
+        { "hotpink", 0xFF69B4FF },
+        { "pink", 0xFFC0CBFF },
+        { "lightpink", 0xFFB6C1FF },
+        { "mistyrose", 0xFFE4E1FF },
+        { "lavenderblush", 0xFFF0F5FF },
+        { "indigo", 0x4B0082FF },
+        { "purple", 0x800080FF },
+        { "darkmagenta", 0x8B008BFF },
+        { "darkorchid", 0x9932CCFF },
+        { "blue", 0x0000FFFF },
+        { "blueviolet", 0x8A2BE2FF },
+        { "darkviolet", 0x9400D3FF },
+        { "slateblue", 0x6A5ACDFF },
+        { "mediumpurple", 0x9370DBFF },
+        { "mediumslateblue", 0x7B68EEFF },
+        { "mediumorchid", 0xBA55D3FF },
+        { "violet", 0xEE82EEFF },
+        { "plum", 0xDDA0DDFF },
+        { "thistle", 0xD8BFD8FF },
+        { "lavender", 0xE6E6FAFF },
+        { "saddlebrown", 0x8B4513FF },
+        { "sienna", 0xA0522DFF },
+        { "chocolate", 0xD2691EFF },
+        { "indianred", 0xCD5C5CFF },
+        { "rosybrown", 0xBC8F8FFF },
+        { "lightcorol", 0xF08080FF },
+        { "salmon", 0xFA8072FF },
+        { "lightsalmon", 0xFFA07AFF },
+        { "orangered", 0xFF4500FF },
+        { "tomato", 0xFF6347FF },
+        { "coral", 0xFF7F50FF },
+        { "darkorange", 0xFF8C00FF },
+        { "sandybrown", 0xF4A460FF },
+        { "peru", 0xCD853FFF },
+        { "tan", 0xD2B48CFF },
+        { "burlywood", 0xDEB887FF },
+        { "wheat", 0xF5DEB3FF },
+        { "moccasin", 0xFFE4B5FF },
+        { "navajowhite", 0xFFDEADFF },
+        { "peachpuff", 0xFFDAB9FF },
+        { "bisque", 0xFFE4C4FF },
+        { "antuquewhite", 0xFAEBD7FF },
+        { "papayawhip", 0xFFEFD5FF },
+        { "cornsilk", 0xFFF8DCFF },
+        { "oldlace", 0xFDF5E6FF },
+        { "linen", 0xFAF0E6FF },
+        { "seashell", 0xFFF5EEFF },
+        { "snow", 0xFFFAFAFF },
+        { "floralwhite", 0xFFFAF0FF },
+        { "ivory", 0xFFFFF0FF },
+        { "mintcream", 0xF5FFFAFF },
+        { "darkgoldenrod", 0xB8860BFF },
+        { "goldenrod", 0xDAA520FF },
+        { "gold", 0xFFD700FF },
+        { "yellow", 0xFFFF00FF },
+        { "darkkhaki", 0xBDB76BFF },
+        { "khaki", 0xF0E68CFF },
+        { "palegoldenrod", 0xEEE8AAFF },
+        { "beige", 0xF5F5DCFF },
+        { "lemonchiffon", 0xFFFACDFF },
+        { "lightgoldenrodyellow", 0xFAFAD2FF },
+        { "lightyellow", 0xFFFFE0FF },
+        { "darkslategray", 0x2F4F4FFF },
+        { "darkolivegreen", 0x556B2FFF },
+        { "olive", 0x808000FF },
+        { "darkgreen", 0x006400FF },
+        { "forestgreen", 0x228B22FF },
+        { "seagreen", 0x2E8B57FF },
+        { "green", 0x008080FF },
+        { "teal", 0x008080FF },
+        { "lightseagreen", 0x20B2AAFF },
+        { "madiumaquamarine", 0x66CDAAFF },
+        { "mediumseagreen", 0x3CB371FF },
+        { "darkseagreen", 0x8FBC8FFF },
+        { "yellowgreen", 0x9ACD32FF },
+        { "limegreen", 0x32CD32FF },
+        { "lime", 0x00FF00FF },
+        { "chartreuse", 0x7FFF00FF },
+        { "lawngreen", 0x7CFC00FF },
+        { "greenyellow", 0xADFF2FFF },
+        { "mediumspringgreen", 0x00FA9AFF },
+        { "springgreen", 0x00FF7FFF },
+        { "lightgreen", 0x90EE90FF },
+        { "palegreen", 0x98F898FF },
+        { "aquamarine", 0x7FFFD4FF },
+        { "honeydew", 0xF0FFF0FF },
+        { "midnightblue", 0x191970FF },
+        { "navy", 0x000080FF },
+        { "darkblue", 0x00008BFF },
+        { "darkslateblue", 0x483D8BFF },
+        { "mediumblue", 0x0000CDFF },
+        { "royalblue", 0x4169E1FF },
+        { "dodgerblue", 0x1E90FFFF },
+        { "cornflowerblue", 0x6495EDFF },
+        { "deepskyblue", 0x00BFFFFF },
+        { "lightskyblue", 0x87CEFAFF },
+        { "lightsteelblue", 0xB0C4DEFF },
+        { "lightblue", 0xADD8E6FF },
+        { "steelblue", 0x4682B4FF },
+        { "darkcyan", 0x008B8BFF },
+        { "cadetblue", 0x5F9EA0FF },
+        { "darkturquoise", 0x00CED1FF },
+        { "mediumturquoise", 0x48D1CCFF },
+        { "turquoise", 0x40E0D0FF },
+        { "skyblue", 0x87CECBFF },
+        { "powderblue", 0xB0E0E6FF },
+        { "paleturquoise", 0xAFEEEEFF },
+        { "lightcyan", 0xE0FFFFFF },
+        { "azure", 0xF0FFFFFF },
+        { "aliceblue", 0xF0F8FFFF },
+        { "aqua", 0x00FFFFFF },
+        { "cyan", 0x00FFFFFF },
+        { "black", 0x000000FF },
+        { "dimgray", 0x696969FF },
+        { "gray", 0x808080FF },
+        { "slategray", 0x708090FF },
+        { "lightslategray", 0x778899FF },
+        { "darkgray", 0xA9A9A9FF },
+        { "silver", 0xC0C0C0FF },
+        { "lightgray", 0xD3D3D3FF },
+        { "gainsboro", 0xDCDCDCFF },
+        { "whitesmoke", 0xF5F5F5FF },
+        { "ghostwhite", 0xF8F8FFFF },
+        { "white", 0xFFFFFFFF }
+    };
+    return style_colors;
+}
+
+std::map<std::string_view, std::function<xui::style::variant( std::string_view::iterator &, std::string_view::iterator )>> & xui::style::functions()
+{
+    static std::map<std::string_view, std::function<xui::style::variant( std::string_view::iterator &, std::string_view::iterator )>> style_functions =
+    {
+        {"url", xui::style::parse_url },
+        {"rgb", xui::style::parse_rgb },
+        {"rgba", xui::style::parse_rgba },
+        {"vec2", xui::style::parse_vec2 },
+        {"vec4", xui::style::parse_vec4 },
+        {"dark", xui::style::parse_dark },
+        {"light", xui::style::parse_light },
+        {"hatch", xui::style::parse_hatch },
+        {"sample", xui::style::parse_sample },
+        {"linear", xui::style::parse_linear },
+        {"stroke", xui::style::parse_stroke },
+        {"border", xui::style::parse_border },
+        {"filled", xui::style::parse_filled },
+    };
+    return style_functions;
+}
+
+
+
+
 
 struct xui::context::private_p
 {
@@ -895,9 +1118,8 @@ public:
         , _disables( res )
         , _infos( res )
         , _rects( res )
-        , _types( res )
         , _focus( res )
-        , _menus( res )
+        , _types( res )
         , _fonts( res )
         , _styles( res )
         , _strids( res )
@@ -920,9 +1142,8 @@ public:
     std::pmr::deque<bool> _disables;
     std::pmr::deque<info_type> _infos;
     std::pmr::deque<xui::rect> _rects;
-    std::pmr::deque<style_type> _types;
     std::pmr::deque<focus_type> _focus;
-    std::pmr::deque<std::string> _menus;
+    std::pmr::deque<style_type> _types;
     std::pmr::deque<xui::font_id> _fonts;
     std::pmr::deque<xui::style *> _styles;
     std::pmr::deque<std::string> _strids;
@@ -950,6 +1171,7 @@ std::string_view xui::context::dark_style()
 R"(
     *{
         font-color: white;
+        text-align: center;
 
         margin: vec4( 0, 0, 0, 0 );
         padding: vec4( 0, 0, 0, 0 );
@@ -1020,8 +1242,18 @@ R"(
         filled: filled( solid, rgb( 76, 74, 72 ) );
     },
     menubar{
+        filled: filled( solid, rgb( 76, 74, 72 ) );
+        border: border( solid, 1, transparent, vec4( 0, 0, 0, 0 ) );
     },
     menubar-menu{
+        minimum-width: 50;
+        maximum-width: 150;
+    },
+    menubar-menu:hover{
+        filled: filled( solid, green );
+    },
+    menubar-menu:active{
+        filled: filled( solid, darkgray );
     },
     menubar-item{
     },
@@ -1055,7 +1287,6 @@ R"(
     },
     process-text{
         font-color: white;
-        text-align: center;
     },
     process-cursor{
         border-color: transparent;
@@ -1183,16 +1414,21 @@ void xui::context::pop_style()
     _p->_styles.pop_back();
 }
 
-bool xui::context::current_style( std::string_view attr, void * object ) const
+xui::style::variant xui::context::current_style( std::string_view attr ) const
 {
     std::string name = style_name();
 
+    name.append( "@" );
+    name.append( attr );
+
     for ( auto it = _p->_styles.rbegin(); it != _p->_styles.rend(); ++it )
     {
-        return ( *it )->find( name, attr, object );
+        auto val = ( *it )->find( name );
+        if ( val.index() != 0 )
+            return val;
     }
 
-    return false;
+    return {};
 }
 
 void xui::context::push_style_type( std::string_view type )
@@ -1264,6 +1500,11 @@ xui::font_id xui::context::current_font() const
 void xui::context::push_rect( const xui::rect & rect )
 {
     _p->_rects.push_back( rect );
+}
+
+void xui::context::margins_currrent_rect( float left, float right, float top, float bottom )
+{
+    _p->_rects.back() = _p->_rects.back().margins_added( left, right, top, bottom );
 }
 
 void xui::context::pop_rect()
@@ -1370,20 +1611,37 @@ void xui::context::begin()
 
     while ( !_p->_focus.empty() )
     {
-        if ( _p->_focus.back().event >= xui::event::KEY_EVENT_BEG && _p->_focus.back().event <= xui::event::KEY_EVENT_END )
+        if ( _p->_focus.back().type == action_focus_type )
         {
-
-        }
-        else if ( _p->_focus.back().event >= xui::event::GAMEPAD_EVENT_BEG && _p->_focus.back().event <= xui::event::GAMEPAD_EVENT_END )
-        {
-
-        }
-        else if ( _p->_focus.back().event >= xui::event::MOUSE_EVENT_BEG && _p->_focus.back().event <= xui::event::MOUSE_EVENT_END )
-        {
-            if ( _p->_impl->get_event( _p->_focus.back().id, _p->_focus.back().event ) == 0 )
+            if ( _p->_focus.back().event >= xui::event::KEY_EVENT_BEG && _p->_focus.back().event <= xui::event::KEY_EVENT_END )
             {
-                _p->_focus.pop_back();
-                continue;
+
+            }
+            else if ( _p->_focus.back().event >= xui::event::MOUSE_EVENT_BEG && _p->_focus.back().event <= xui::event::MOUSE_EVENT_END )
+            {
+                if ( _p->_impl->get_event( _p->_focus.back().id, _p->_focus.back().event ) == 0 )
+                {
+                    _p->_focus.pop_back();
+                    continue;
+                }
+            }
+            else if ( _p->_focus.back().event >= xui::event::GAMEPAD_EVENT_BEG && _p->_focus.back().event <= xui::event::GAMEPAD_EVENT_END )
+            {
+
+            }
+        }
+        else if ( _p->_focus.back().type == action_menu_type )
+        {
+            if ( _p->_focus.back().event >= xui::event::MOUSE_EVENT_BEG && _p->_focus.back().event <= xui::event::MOUSE_EVENT_END )
+            {
+                if ( _p->_impl->get_event( _p->_focus.back().id, _p->_focus.back().event ) == 1 )
+                {
+                    if ( !_p->_focus.back().rect.contains( _p->_impl->get_cursor_pos( _p->_focus.back().id ) ) )
+                    {
+                        _p->_focus.pop_back();
+                        continue;
+                    }
+                }
             }
         }
 
@@ -1410,8 +1668,7 @@ std::span<xui::drawcmd> xui::context::end()
 
 bool xui::context::begin_window( std::string_view title, xui::texture_id icon_id, int flags )
 {
-    auto str_id = std::format( "_window_{}", _p->_str_id++ );
-    return begin_window( str_id, title, icon_id, flags );
+    return begin_window( std::format( "_window_{}", _p->_str_id++ ), title, icon_id, flags );
 }
 
 bool xui::context::begin_window( xui::string_id str_id, std::string_view title, xui::texture_id icon_id, int flags )
@@ -1605,7 +1862,7 @@ void xui::context::end_window()
                     {
                         draw_rect( move_rect, [&]()
                         {
-                            if ( get_action_name( true ) == "active" )
+                            if ( get_action_name( action_focus_type ) == "active" )
                             {
                                 auto wr = _p->_impl->get_window_rect( id );
                                 auto dt = _p->_impl->get_cursor_dt( id );
@@ -1621,7 +1878,7 @@ void xui::context::end_window()
                 {
                     draw_rect( resize_rect, [&]()
                     {
-                        if ( get_action_name( true ) == "active" )
+                        if ( get_action_name( action_focus_type ) == "active" )
                         {
                             auto wr = _p->_impl->get_window_rect( id );
                             auto dt = _p->_impl->get_cursor_dt( id );
@@ -1643,8 +1900,7 @@ void xui::context::end_window()
 
 bool xui::context::image( xui::texture_id id )
 {
-    auto str_id = std::format( "_image_{}", _p->_str_id++ );
-    return image( str_id, id );
+    return image( std::format( "_image_{}", _p->_str_id++ ), id );
 }
 
 bool xui::context::image( xui::string_id str_id, xui::texture_id id )
@@ -1661,8 +1917,7 @@ bool xui::context::image( xui::string_id str_id, xui::texture_id id )
 
 bool xui::context::label( std::string_view text )
 {
-    auto str_id = std::format( "_label_{}", _p->_str_id++ );
-    return label( str_id, text );
+    return label( std::format( "_label_{}", _p->_str_id++ ), text );
 }
 
 bool xui::context::label( xui::string_id str_id, std::string_view text )
@@ -1679,8 +1934,7 @@ bool xui::context::label( xui::string_id str_id, std::string_view text )
 
 bool xui::context::radio( bool & checked )
 {
-    auto str_id = std::format( "_radio_{}", _p->_str_id++ );
-    return radio( str_id, checked );
+    return radio( std::format( "_radio_{}", _p->_str_id++ ), checked );
 }
 
 bool xui::context::radio( xui::string_id str_id, bool & checked )
@@ -1719,8 +1973,7 @@ bool xui::context::radio( xui::string_id str_id, bool & checked )
 
 bool xui::context::check( bool & checked )
 {
-    auto str_id = std::format( "_check_{}", _p->_str_id++ );
-    return check( str_id, checked );
+    return check( std::format( "_check_{}", _p->_str_id++ ), checked );
 }
 
 bool xui::context::check( xui::string_id str_id, bool & checked )
@@ -1762,8 +2015,7 @@ bool xui::context::check( xui::string_id str_id, bool & checked )
 
 bool xui::context::button( std::string_view text )
 {
-    auto str_id = std::format( "_button_{}", _p->_str_id++ );
-    return button( str_id, text );
+    return button( std::format( "_button_{}", _p->_str_id++ ), text );
 }
 
 bool xui::context::button( xui::string_id str_id, std::string_view text )
@@ -1802,8 +2054,7 @@ bool xui::context::button( xui::string_id str_id, std::string_view text )
 
 float xui::context::slider( float & value, float min, float max )
 {
-    auto str_id = std::format( "_slider_{}", _p->_str_id++ );
-    return slider( str_id, value, min, max );
+    return slider( std::format( "_slider_{}", _p->_str_id++ ), value, min, max );
 }
 
 float xui::context::slider( xui::string_id str_id, float & value, float min, float max )
@@ -1816,7 +2067,7 @@ float xui::context::slider( xui::string_id str_id, float & value, float min, flo
         {
             auto back_rect = currrent_rect();
             xui::vec2 pos = _p->_impl->get_cursor_pos( id );
-            std::string_view action = get_action_name( true );
+            std::string_view action = get_action_name( action_focus_type );
 
             draw_style_action( action, [&]()
             {
@@ -1834,7 +2085,7 @@ float xui::context::slider( xui::string_id str_id, float & value, float min, flo
                 float backtop = back_rect.y;
                 float backbottom = back_rect.y + back_rect.h;
 
-                switch ( current_style( "direction", xui::direction::LEFT_RIGHT ) )
+                switch ( current_style( "direction" ).value<xui::direction>( xui::direction::LEFT_RIGHT ) )
                 {
                 case xui::direction::LEFT_RIGHT:
                 {
@@ -1922,8 +2173,7 @@ float xui::context::slider( xui::string_id str_id, float & value, float min, flo
 
 bool xui::context::process( float value, float min, float max, std::string_view text )
 {
-    auto str_id = std::format( "_process_{}", _p->_str_id++ );
-    return process( str_id, value, min, max, text );
+    return process( std::format( "_process_{}", _p->_str_id++ ), value, min, max, text );
 }
 
 bool xui::context::process( xui::string_id str_id, float value, float min, float max, std::string_view text )
@@ -1941,7 +2191,7 @@ bool xui::context::process( xui::string_id str_id, float value, float min, float
                 xui::rect cursor_rect;
                 value = ( value - min ) / ( max - min );
 
-                switch ( current_style( "direction", xui::direction::LEFT_RIGHT ) )
+                switch ( current_style( "direction" ).value<xui::direction>( xui::direction::LEFT_RIGHT ) )
                 {
                 case xui::direction::LEFT_RIGHT:
                     cursor_rect = { back_rect.x, back_rect.y, back_rect.w * value, back_rect.h };
@@ -1976,8 +2226,7 @@ bool xui::context::process( xui::string_id str_id, float value, float min, float
 
 float xui::context::scrollbar( float & value, float step, float min, float max, xui::direction dir )
 {
-    auto str_id = std::format( "_scrollbar_{}", _p->_str_id++ );
-    return scrollbar( str_id, value, step, min, max, dir );
+    return scrollbar( std::format( "_scrollbar_{}", _p->_str_id++ ), value, step, min, max, dir );
 }
 
 float xui::context::scrollbar( xui::string_id str_id, float & value, float step, float min, float max, xui::direction dir )
@@ -2016,14 +2265,14 @@ float xui::context::scrollbar( xui::string_id str_id, float & value, float step,
                 case xui::direction::RIGHT_LEFT:
                     detect_rect = { back_rect.x + arrow_radius,  back_rect.y, back_rect.w - arrow_radius * 2, back_rect.h };
                     push_rect( detect_rect );
-                    action = get_action_name( true );
+                    action = get_action_name( action_focus_type );
                     pop_rect();
                     break;
                 case xui::direction::TOP_BOTTOM:
                 case xui::direction::BOTTOM_TOP:
                     detect_rect = { back_rect.x,  back_rect.y + arrow_radius, back_rect.w, back_rect.h - arrow_radius * 2 };
                     push_rect( detect_rect );
-                    action = get_action_name( true );
+                    action = get_action_name( action_focus_type );
                     pop_rect();
                     break;
                 default:
@@ -2232,54 +2481,126 @@ float xui::context::scrollbar( xui::string_id str_id, float & value, float step,
     return value;
 }
 
+bool xui::context::begin_menubar()
+{
+    return begin_menubar( std::format( "_menubar_{}", _p->_str_id++ ) );
+}
+
 bool xui::context::begin_menubar( xui::string_id str_id )
 {
-    if ( str_id.empty() )
-        push_string_id( std::format( "_menubar_{}", _p->_str_id++ ) );
-    else
-        push_string_id( str_id );
+    push_string_id( str_id );
 
     auto rect = currrent_rect();
 
-    xui::rect back_rect = { rect.x, rect.y + 30, rect.w, 30 };
+    xui::rect back_rect = { rect.x, rect.y, rect.w, 30 };
 
     push_style_type( "menubar" );
     push_rect( back_rect );
 
     draw_rect( back_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
-    return false;
-}
-
-bool xui::context::begin_menu( std::string_view name )
-{
-    auto rect = currrent_rect();
-
-    draw_style_element( "menu", [&]()
-    {
-        std::string_view action = get_action_name();
-        auto size = _p->_impl->font_size( current_font(), name );
-        xui::rect menu_rect = { rect.x, rect.y, size.w, rect.h };
-
-        draw_style_action( action, [&]()
-        {
-            draw_rect( menu_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-            draw_text( name, current_font(), menu_rect, current_style( "font-color", xui::color( 255, 255, 255 ) ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
-        } );
-    });
-
-    return false;
+    return true;
 }
 
 void xui::context::end_menubar()
 {
     pop_rect();
     pop_style_type();
+    pop_string_id();
 
     auto rect = currrent_rect();
     push_rect( { rect.x, rect.y + 30, rect.w, rect.h - 30 } );
 }
 
+bool xui::context::begin_menu( std::string_view name )
+{
+    return begin_menu( std::format( "_menu_{}", _p->_str_id++ ), name );
+}
+
+bool xui::context::begin_menu( xui::string_id str_id, std::string_view name )
+{
+    push_string_id( str_id );
+
+    std::string_view action;
+
+    draw_style_element( "menu", [&]()
+    {
+        auto rect = currrent_rect();
+        auto minw = current_style( "minimum-width", 10.0f );
+        auto maxw = std::min( rect.w, current_style( "maximum-width", 50.0f ) );
+        auto size = _p->_impl->font_size( current_font(), name );
+        xui::rect menu_rect = { rect.x, rect.y, std::clamp( size.w, minw, maxw ), rect.h };
+
+        draw_rect( menu_rect, [&]()
+        {
+            action = get_action_name( action_menu_type );
+
+            draw_style_action( action, [&]()
+            {
+                draw_rect( menu_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                draw_text( name, current_font(), menu_rect, current_style( "font-color", xui::color( 255, 255, 255 ) ), current_style( "text-align", xui::alignment_flag::ALIGN_VCENTER ) );
+            } );
+        } );
+
+        margins_currrent_rect( menu_rect.w, 0, 0, 0 );
+
+        if ( action == "active" )
+            push_rect( { menu_rect.x, menu_rect.y + menu_rect.h, 0, 0 } );
+        else
+            push_rect( rect );
+    } );
+
+    return ( action == "active" );
+}
+
+void xui::context::end_menu()
+{
+    pop_rect();
+    pop_string_id();
+}
+
+bool xui::context::menu_item( std::string_view name, bool menu )
+{
+    return menu_item( std::format( "_menu_item_{}", _p->_str_id++ ), name, menu );
+}
+
+bool xui::context::menu_item( xui::string_id str_id, std::string_view name, bool menu )
+{
+    std::string_view action;
+
+    draw_string_id( str_id, [&]()
+    {
+        draw_style_element( "item", [&]()
+        {
+            auto rect = currrent_rect();
+            auto size = _p->_impl->font_size( current_font(), name );
+            xui::rect item_rect = { rect.x, rect.y, std::max( size.w, rect.w ), 30 };
+
+            draw_rect( item_rect, [&]()
+            {
+                action = get_action_name( menu ? action_menu_type : action_nil_type );
+
+                draw_style_action( action, [&]()
+                {
+                    draw_text( name, current_font(), item_rect, current_style( "font-color", xui::color( 255, 255, 255 ) ), current_style( "text-align", (xui::alignment_flag)( xui::alignment_flag::ALIGN_LEFT | xui::alignment_flag::ALIGN_VCENTER ) ) );
+
+                    if ( menu )
+                    {
+                        draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                            .moveto( { item_rect.x + item_rect.w - ( 30.0f * 0.7f ), item_rect.y + item_rect.h * 0.5f } )
+                            .lineto( { item_rect.x + item_rect.w - ( 30.0f * 0.3f ), item_rect.y + item_rect.h * 0.3f } )
+                            .lineto( { item_rect.x + item_rect.w - ( 30.0f * 0.3f ), item_rect.y + item_rect.h * 0.7f } )
+                            .closepath();
+                    }
+                } );
+            } );
+
+            margins_currrent_rect( 0, item_rect.h, item_rect.w - rect.w, item_rect.h );
+        } );
+    } );
+
+    return ( action == "active" );
+}
 
 xui::drawcmd::text_element & xui::context::draw_text( std::string_view text, xui::font_id id, const xui::rect & rect, const xui::color & font_color, xui::alignment_flag text_align )
 {
@@ -2392,6 +2713,12 @@ std::string xui::context::style_name() const
 {
     std::string result;
 
+    if ( !_p->_strids.empty() )
+    {
+        result.append( _p->_strids.back() );
+        result.append( "#" );
+    }
+
     result.append( _p->_types.back().type.begin(), _p->_types.back().type.end() );
 
     for ( const auto & it : _p->_types.back().elements )
@@ -2404,12 +2731,6 @@ std::string xui::context::style_name() const
     {
         result.append( ":" );
         result.append( _p->_types.back().actions.back() );
-    }
-
-    if ( !_p->_strids.empty() )
-    {
-        result.append( "#" );
-        result.append( _p->_strids.back() );
     }
 
     return result;
@@ -2436,19 +2757,52 @@ std::string xui::context::focus_name() const
     return result;
 }
 
-void xui::context::push_focus( xui::event event )
+void xui::context::push_focus( xui::event event, int type )
 {
-    focus_type type;
-    type.id = current_window_id();
-    type.name = focus_name();
-    type.event = event;
-    _p->_focus.push_back( type );
+    focus_type t;
+    t.id = current_window_id();
+    t.type = type;
+    t.name = focus_name();
+    t.rect = currrent_rect();
+    t.event = event;
+
+    if ( !_p->_focus.empty() && _p->_focus.back().type != type )
+    {
+        _p->_focus.clear();
+    }
+    else if ( !_p->_focus.empty() && _p->_focus.back().type == type && type == action_menu_type )
+    {
+        while ( !_p->_focus.empty() && _p->_focus.back().name != t.name )
+            _p->_focus.pop_back();
+    }
+
+    _p->_focus.push_back( t );
 }
 
 void xui::context::pop_focus()
 {
     if ( !_p->_focus.empty() )
         _p->_focus.pop_back();
+}
+
+bool xui::context::exist_menu() const
+{
+    if ( _p->_focus.empty() )
+        return false;
+
+    auto name = focus_name();
+    return std::find_if( _p->_focus.begin(), _p->_focus.end(), [&]( const auto & val ) { return val.name.find( name ) != std::string::npos; } ) != _p->_focus.end();
+}
+
+bool xui::context::inherit_focus() const
+{
+    if ( _p->_focus.empty() )
+        return true;
+
+    if ( _p->_focus.back().type != action_focus_type )
+        return true;
+
+    return focus_name().find( _p->_focus.back().name ) != std::string::npos;
 }
 
 bool xui::context::current_focus() const
@@ -2459,16 +2813,14 @@ bool xui::context::current_focus() const
     return _p->_focus.back().name == focus_name();
 }
 
-bool xui::context::inherit_focus() const
+std::string_view xui::context::get_action_name( int type )
 {
-    if ( _p->_focus.empty() )
-        return true;
-
-    return focus_name().find( _p->_focus.back().name ) != std::string::npos;
-}
-
-std::string_view xui::context::get_action_name( bool focus )
-{
+    /*
+    * hover
+    * active
+    * disable
+    * selected
+    */
     auto id = current_window_id();
     auto rect = currrent_rect();
     auto pos = _p->_impl->get_cursor_pos( id );
@@ -2477,7 +2829,11 @@ std::string_view xui::context::get_action_name( bool focus )
     {
         return "disable";
     }
-    else if ( focus && current_focus() )
+    else if ( ( type == action_menu_type ) && exist_menu() )
+    {
+        return "active";
+    }
+    else if ( ( type == action_focus_type ) && current_focus() )
     {
         return "active";
     }
@@ -2485,8 +2841,9 @@ std::string_view xui::context::get_action_name( bool focus )
     {
         if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && rect.contains( pos ) )
         {
-            push_focus( xui::event::KEY_MOUSE_LEFT );
-
+            if( type != action_nil_type )
+                push_focus( xui::event::KEY_MOUSE_LEFT, type );
+            
             return "active";
         }
         else if ( _p->_impl->get_event( id, xui::event::MOUSE_ACTIVE ) && rect.contains( pos ) )

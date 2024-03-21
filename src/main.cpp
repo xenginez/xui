@@ -8,13 +8,13 @@ static float hscollbar_value = 0;
 
 int main()
 {
-	auto & map = xui::style::meta_struct_map();
-	 
-
 	xui::context ctx;
 	gdi_implement imp;
 	xui::style style;
 	style.parse( xui::context::dark_style() );
+
+	std::vector<xui::url> urls;
+	style.get_values<xui::url>( urls );
 
 	imp.init();
 	ctx.init( &imp );
@@ -33,6 +33,22 @@ int main()
 				{
 					ctx.begin_window( "³¬¼¶UI", icon, xui::window_flag::WINDOW_NO_MINIMIZEBOX );
 					{
+						std::string_view menus[] = { "menu1", "menu2" , "menu3" , "menu4" , "menu_menu_menu_menu_5" };
+						ctx.begin_menubar();
+						{
+							if ( ctx.begin_menu( "menu1" ) )
+							{
+								std::cout << "menu1" << std::endl;
+							}
+							ctx.end_menu();
+							if ( ctx.begin_menu( "menu2" ) )
+							{
+								std::cout << "menu2" << std::endl;
+							}
+							ctx.end_menu();
+						}
+						ctx.end_menubar();
+
 						ctx.push_rect( { 100, 100, 100, 100 } );
 						ctx.label( "·Ü¶·¾«Éñ¹ÄÀø" );
 						ctx.pop_rect();
@@ -73,6 +89,7 @@ int main()
 						ctx.push_rect( { rect.x, rect.y + rect.h - 20, rect.w - 20, 20 } );
 						ctx.scrollbar( hscollbar_value, 0.1f, 0, 1, xui::direction::LEFT_RIGHT );
 						ctx.pop_rect();
+
 
 					}
 					ctx.end_window();

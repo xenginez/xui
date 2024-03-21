@@ -15,14 +15,15 @@ namespace xui
 	class url;
 	class size;
 	class rect;
-	class vec2;
 	class vec4;
+	class vec2;
 	class color;
-	class hatch;
 	class stroke;
 	class border;
 	class filled;
-	class linear;
+	class hatch_color;
+	class texture_brush;
+	class linear_gradient;
 
 	class style;
 	class drawcmd;
@@ -32,12 +33,6 @@ namespace xui
 	template<typename ... Ts>
 	struct overload : Ts ... { using Ts::operator() ...; };
 	template<class... Ts> overload( Ts... ) -> overload<Ts...>;
-	constexpr uint32_t hash( const char * data )
-	{
-		uint32_t h( 0 );
-		for ( int i = 0; data && ( '\0' != data[i] ); i++ ) h = ( h << 6 ) ^ ( h >> 26 ) ^ data[i];
-		return h;
-	}
 
 	enum err
 	{
@@ -158,7 +153,7 @@ namespace xui
 		ORIENT_BOTTOM,
 	};
 
-	enum font_flag : uint32_t
+	enum font_flag
 	{
 		FONT_NONE = 0,
 		FONT_BOLD = 1 << 0,
@@ -166,7 +161,7 @@ namespace xui
 		FONT_UNDERLINE = 1 << 2,
 		FONT_STRIKEOUT = 1 << 3,
 	};
-	enum window_flag : uint32_t
+	enum window_flag
 	{
 		WINDOW_NONE = 0,
 		WINDOW_NO_MOVE = 1 << 0,
@@ -181,15 +176,13 @@ namespace xui
 		WINDOW_NO_MINIMIZEBOX = 1 << 9,
 		WINDOW_NO_MAXIMIZEBOX = 1 << 10,
 	};
-	enum window_status : uint32_t
+	enum menubar_flag
 	{
-		WINDOW_SHOW = 1 << 0,
-		WINDOW_HIDE = 1 << 1,
-		WINDOW_RESTORE = 1 << 2,
-		WINDOW_MINIMIZE = 1 << 3,
-		WINDOW_MAXIMIZE = 1 << 4,
+		NONE = 0,
+		MULTILINE = 1 << 0,
+
 	};
-	enum alignment_flag : uint32_t
+	enum alignment_flag
 	{
 		ALIGN_LEFT = 1 << 0,
 		ALIGN_RIGHT = 1 << 1,
@@ -198,6 +191,15 @@ namespace xui
 		ALIGN_VCENTER = 1 << 4,
 		ALIGN_HCENTER = 1 << 5,
 		ALIGN_CENTER = ALIGN_VCENTER | ALIGN_HCENTER,
+	};
+
+	enum window_status
+	{
+		WINDOW_SHOW = 1 << 0,
+		WINDOW_HIDE = 1 << 1,
+		WINDOW_RESTORE = 1 << 2,
+		WINDOW_MINIMIZE = 1 << 3,
+		WINDOW_MAXIMIZE = 1 << 4,
 	};
 
 	using font_id = std::size_t;
@@ -338,14 +340,30 @@ namespace xui
 		xui::color lerp( const xui::color & target, float t ) const;
 	};
 
-	class hatch
+	class hatch_color
 	{
 	public:
-		xui::color fore_color;
-		xui::color back_color;
+		xui::color fore;
+		xui::color back;
 	};
 
-	class linear
+	class texture_brush
+	{
+	public:
+		enum warp
+		{
+			WRAP_TILE,
+			WRAP_TILEFLIPX,
+			WRAP_TILEFLIPY,
+			WRAP_TILEFLIPXY,
+			WRAP_CLAMP
+		};
+
+		xui::url image;
+		warp mode = WRAP_TILE;
+	};
+
+	class linear_gradient
 	{
 	public:
 		xui::vec2 p1, p2;
@@ -381,7 +399,7 @@ namespace xui
 		enum
 		{
 			SOLID, // xui::color 
-			DENSE1, // xui::style::hatch
+			DENSE1, // xui::style::hatch_color
 			DENSE2,
 			DENSE3,
 			DENSE4,
@@ -394,96 +412,162 @@ namespace xui
 			FORWARD,
 			BACKWARD,
 			DIAGCROSS,
-			LINEAR, // xui::style::linear
 			TEXTURE, // xui::style::texture_brush
+			LINEAR_GRADIENT, // xui::style::linear_gradient 
 		};
 
-		uint32_t rule = 0;
 		uint32_t style = SOLID;
-		std::variant<std::monostate, xui::color, xui::hatch, xui::linear> colors;
+		std::variant<std::monostate, xui::color, xui::hatch_color, xui::texture_brush, xui::linear_gradient> colors;
 	};
 
 
 	class style
 	{
+	private:
+		struct inherit { };
+		using variant_type = std::variant<std::monostate, int, float, uint32_t, std::string, xui::color, xui::vec2, xui::vec4, xui::url, xui::hatch_color, xui::texture_brush, xui::linear_gradient, xui::stroke, xui::border, xui::filled, inherit>;
+
 	public:
-		struct variant : public std::variant<std::monostate>
+		struct variant : public variant_type
 		{
-			template<typename T> T value( const T & def )
+		public:
+			using variant_type::variant;
+
+		public:
+			static constexpr const std::size_t nil_idx = 0;
+			static constexpr const std::size_t int_idx = 1;
+			static constexpr const std::size_t float_idx = 2;
+			static constexpr const std::size_t flag_idx = 3;
+			static constexpr const std::size_t string_idx = 4;
+			static constexpr const std::size_t color_idx = 5;
+			static constexpr const std::size_t vec2_idx = 6;
+			static constexpr const std::size_t vec4_idx = 7;
+			static constexpr const std::size_t url_idx = 8;
+			static constexpr const std::size_t hatch_color_idx = 9;
+			static constexpr const std::size_t texture_brush_idx = 10;
+			static constexpr const std::size_t linear_gradient_idx = 11;
+			static constexpr const std::size_t stroke_idx = 12;
+			static constexpr const std::size_t border_idx = 13;
+			static constexpr const std::size_t filled_idx = 14;
+			static constexpr const std::size_t inherit_idx = 15;
+
+		public:
+			template<typename T> T value( const T & def = {} ) const
 			{
+				if ( index() == nil_idx )
+					return def;
+
+				if constexpr ( std::is_enum_v<T> )
+				{
+					return (T)std::get<uint32_t>( *this );
+				}
+				else if constexpr ( std::is_same_v<T, int> )
+				{
+					if ( index() == float_idx )
+						return (T)std::get<float>( *this );
+
+					return std::get<T>( *this );
+				}
+				else if constexpr ( std::is_same_v<T, float> )
+				{
+					if ( index() == int_idx )
+						return (T)std::get<int>( *this );
+
+					return std::get<T>( *this );
+				}
+				else if constexpr ( std::is_same_v<T, xui::size> )
+				{
+					if ( index() == vec2_idx )
+					{
+						auto v2 = std::get<xui::vec2>( *this );
+						return xui::size( v2.x, v2.y );
+					}
+
+					return std::get<T>( *this );
+				}
+				else if constexpr ( std::is_same_v<T, xui::rect> )
+				{
+					if ( index() == vec4_idx )
+					{
+						auto v4 = std::get<xui::vec4>( *this );
+						return xui::rect( v4.x, v4.y, v4.z, v4.w );
+					}
+
+					return std::get<T>( *this );
+				}
+				else
+				{
+					return std::get<T>( *this );
+				}
+
 				return def;
 			}
 		};
-		using iterator = std::string::iterator;
-
-	public:
-		struct meta_property
-		{
-			std::string_view name;
-			std::function<void( void *, std::string_view )> setter;
-		};
-		struct meta_struct
-		{
-			std::string_view name;
-			std::string_view base;
-			std::vector<meta_property> propertys;
-			std::function<void( void *, std::string_view )> construct;
-			static void _calc_construct( const meta_struct & _m, void * _o, std::string_view _d );
-		};
-
-	public:
-		struct meta_attribute
-		{
-			std::string_view name;
-			std::string_view type;
-		};
-		struct meta_element
-		{
-			std::string_view name;
-			meta_element * parent = nullptr;
-			std::vector<meta_attribute> attributes;
-		};
-		struct meta_class : public meta_element
-		{
-			std::vector<meta_element> elements;
-		};
-
-	public:
 		struct selector
 		{
-			struct attribute
-			{
-				std::string_view name;
-				std::string_view data;
-			};
-
-			const meta_element * element = nullptr;
-			std::pmr::map<std::string_view, attribute> attributes;
+			std::pmr::map<std::string, variant> attrs;
 		};
 
 	public:
-		bool parse( std::string_view xss );
-		template<typename T> bool find( std::string_view type, std::string_view attr, T & object ) const
+		style( std::pmr::memory_resource * res = std::pmr::get_default_resource() );
+
+	public:
+		bool parse( std::string_view str );
+		xui::style::variant find( std::string_view name ) const;
+		template<typename T, typename Container> void get_values( Container & _c ) const
 		{
-			return find( name, &object );
+			for ( const auto & it : _selectors )
+			{
+				for ( const auto & addr : it.second.attrs )
+				{
+					std::visit( overload(
+						[&]( const T & val )
+					{
+						_c.push_back( val );
+					},
+						[]( const auto & )
+					{}
+					), addr.second );
+				}
+			}
 		}
 
-	public:
-		bool find( std::string_view name, std::string_view attr, void * object ) const;
-		bool find( const selector & select, const selector::attribute & attr, const meta_element * element, void * object ) const;
-		bool find( const selector & select, const selector::attribute & attr, const meta_element * element, const meta_property & prop, void * object ) const;
-
-	public:
-		static void register_class( meta_class * cls );
-		static void register_struct( meta_struct * str );
-		static const xui::style::meta_class * find_class( std::string_view name );
-		static const xui::style::meta_struct * find_struct( std::string_view name );
-		static std::map<std::string_view, xui::style::meta_class *> & meta_class_map();
-		static std::map<std::string_view, xui::style::meta_struct *> & meta_struct_map();
+	private:
+		std::optional<xui::style::variant> find( std::string_view type, std::string_view attr ) const;
 
 	private:
-		std::string _data;
-		std::map<std::string_view, selector> _selectors;
+		static xui::style::selector parse_selector( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::style::variant parse_attribute( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::color parse_light( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::color parse_dark( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::color parse_rgba( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::color parse_rgb( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::vec2 parse_vec2( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::vec4 parse_vec4( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::color parse_hex( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::url parse_url( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::hatch_color parse_hatch( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::texture_brush parse_sample( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::linear_gradient parse_linear( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::stroke parse_stroke( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::border parse_border( std::string_view::iterator & beg, std::string_view::iterator end );
+		static xui::filled parse_filled( std::string_view::iterator & beg, std::string_view::iterator end );
+
+	private:
+		static std::map<std::string_view, std::uint32_t> & flags();
+		static std::map<std::string_view, std::uint32_t> & colors();
+		static std::map<std::string_view, std::function<xui::style::variant( std::string_view::iterator &, std::string_view::iterator )>> & functions();
+
+	private:
+		template<char c, typename It> static bool check( It & beg, const It & end )
+		{
+			while ( std::isspace( *beg ) ) ++beg;
+
+			return ( beg != end && *beg == c );
+		}
+
+	private:
+		std::pmr::map<std::string, selector> _selectors;
 	};
 
 	class drawcmd
@@ -611,11 +695,10 @@ namespace xui
 	public:
 		void push_style( xui::style * style );
 		void pop_style();
-		bool current_style( std::string_view attr, void * object ) const;
+		xui::style::variant current_style( std::string_view attr ) const;
 		template<typename T> T current_style( std::string_view attr, const T & def ) const
 		{
-			T value;
-			return current_style( attr, &value ) ? value : def;
+			return current_style( attr ).value<T>( def );
 		}
 
 		void push_style_type( std::string_view type );
@@ -638,6 +721,7 @@ namespace xui
 		void push_rect( const xui::rect & rect );
 		void pop_rect();
 		xui::rect currrent_rect() const;
+		void margins_currrent_rect( float left, float right, float top, float bottom );
 
 		void push_disable( bool val );
 		void pop_disable();
@@ -745,12 +829,15 @@ namespace xui
 		float scrollbar( xui::string_id str_id, float & value, float step, float min, float max, xui::direction dir = xui::direction::TOP_BOTTOM );
 
 	public:
-		bool begin_menubar( xui::string_id str_id = "" );
-		bool begin_menu( std::string_view name );
-		bool menu_item( std::string_view name );
-		bool menu_separator();
-		void end_menu();
+		bool begin_menubar();
+		bool begin_menubar( xui::string_id str_id );
 		void end_menubar();
+		bool begin_menu( std::string_view name );
+		bool begin_menu( xui::string_id str_id, std::string_view name );
+		void end_menu();
+		bool menu_item( std::string_view name, bool menu = false );
+		bool menu_item( xui::string_id str_id, std::string_view name, bool menu = false );
+		bool menu_separator();
 
 	public:
 		bool begin_combobox();
@@ -808,11 +895,12 @@ namespace xui
 		std::string focus_name() const;
 
 	private:
-		void push_focus( xui::event event );
+		void push_focus( xui::event event, int type );
 		void pop_focus();
-		bool current_focus() const;
+		bool exist_menu() const;
 		bool inherit_focus() const;
-		std::string_view get_action_name( bool focus = false );
+		bool current_focus() const;
+		std::string_view get_action_name( int type = 0 );
 
 	private:
 		private_p * _p;
@@ -958,129 +1046,4 @@ namespace xui
 	{
 		return lhs.x != rhs.x || lhs.y != rhs.y || lhs.w != rhs.w || lhs.h != rhs.h;
 	}
-
-	template<typename T> struct register_meta_struct;
-	template<const char * NAME> struct register_meta_class;
 }
-
-#define MACRO_CAT(x, y)     x##y
-#define MACRO_GLUE(x, y)    MACRO_CAT(x, y)
-#define MACRO_EXP_(exp) exp
-#define MACRO_ARGS_FILTER(_0,_1,_2,_3,_4,_5,_6,_7,_8,_9,_N, ...) _N
-#define MACRO_ARGS_CONTER(...)  MACRO_EXP_( MACRO_ARGS_FILTER( 0, ##__VA_ARGS__, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 ) )
-
-#define BEG_STRUCT_2( TYPE, BASE ) \
-template<> struct xui::register_meta_struct<TYPE> \
-{ \
-	using struct_type = TYPE; \
-	register_meta_struct() \
-	{ \
-		static xui::style::meta_struct meta; \
-		meta.name = #TYPE; \
-		meta.base = #BASE;
-
-#define BEG_STRUCT_1( TYPE ) \
-template<> struct xui::register_meta_struct<TYPE> \
-{ \
-	using struct_type = TYPE; \
-	register_meta_struct() \
-	{ \
-		static xui::style::meta_struct meta; \
-		meta.name = #TYPE;
-
-#define BEG_STRUCT( ... ) MACRO_EXP_( MACRO_GLUE( BEG_STRUCT_, MACRO_ARGS_CONTER( __VA_ARGS__ ) )( __VA_ARGS__ ) )
-
-#define CONSTRUCT( ... ) \
-		meta.construct = []( void * _o, std::string_view data ) \
-		{ \
-			auto object = (struct_type *)_o; \
-			__VA_ARGS__ \
-		};
-
-#define PROP( NAME, ... ) \
-		meta.propertys.push_back( { #NAME, []( void * _o, std::string_view data ) \
-		{ \
-			auto object = (struct_type *)_o; \
-			__VA_ARGS__ \
-		} } ); 
-
-#define PROP_TYPE( NAME, TYPE ) \
-		meta.propertys.push_back( { #NAME, []( void * _o, std::string_view data ) \
-		{ \
-			auto object = (struct_type *)_o; \
-			xui::style::find_struct( #TYPE )->construct( &object->##NAME, data ); \
-		} } ); 
-
-#define END_STRUCT( TYPE ) \
-		xui::style::register_struct( &meta ); \
-	} \
-}; static xui::register_meta_struct<TYPE> _register_meta_struct_##TYPE = {};
-
-#define BEG_ENUM( TYPE ) \
-template<> struct xui::register_meta_struct<TYPE> \
-{ \
-	using enum_type = TYPE; \
-	register_meta_struct() \
-	{ \
-		static xui::style::meta_struct meta; \
-		meta.name = #TYPE;  \
-		meta.construct = []( void * _o, std::string_view data ) \
-		{ 
-
-#define VALUE( NAME, VALUE ) if( data == NAME ) (*(enum_type *)_o) = (enum_type)( VALUE );
-
-#define END_ENUM( TYPE ) \
-		}; \
-		xui::style::register_struct( &meta ); \
-	} \
-}; static xui::register_meta_struct<TYPE> _register_meta_struct_##TYPE = {};
-
-#define BEG_FLAGS( TYPE ) \
-template<> struct xui::register_meta_struct<TYPE> \
-{ \
-	using flags_type = TYPE; \
-	register_meta_struct() \
-	{ \
-		static xui::style::meta_struct meta; \
-		meta.name = #TYPE;  \
-		meta.construct = []( void * _o, std::string_view data ) \
-		{ \
-			xui::style::meta_struct::_calc_construct( meta, _o, data ); \
-		};
-
-#define FLAG( NAME, VALUE ) \
-		meta.propertys.push_back( { #NAME, []( void * _o, std::string_view data ) \
-		{ \
-			(*(flags_type *)_o) = (flags_type)( VALUE ); \
-		} } ); 
-
-#define END_FLAGS( TYPE ) \
-		xui::style::register_struct( &meta ); \
-	} \
-}; static xui::register_meta_struct<TYPE> _register_meta_struct_##TYPE = {};
-
-
-#define BEG_CLASS( TYPE ) \
-static constexpr char TYPE##_name[] = #TYPE; \
-template<> struct xui::register_meta_class<TYPE##_name> \
-{ \
-	register_meta_class() \
-	{ \
-		static xui::style::meta_class meta; \
-		meta.name = #TYPE;
-
-#define ATTR( NAME, TYPE ) \
-		meta.attributes.push_back( { #NAME, #TYPE } );
-
-#define BEG_ELEMENT( NAME ) \
-		{ \
-			xui::style::meta_element meta; \
-			meta.name = #NAME;
-
-#define END_ELEMENT( NAME ) \
-		}
-
-#define END_CLASS( TYPE ) \
-		xui::style::register_class( &meta ); \
-	} \
-}; static xui::register_meta_class<TYPE##_name> _register_meta_class_##TYPE = {};
