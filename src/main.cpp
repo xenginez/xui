@@ -33,21 +33,20 @@ int main()
 				{
 					ctx.begin_window( "³¬¼¶UI", icon, xui::window_flag::WINDOW_NO_MINIMIZEBOX );
 					{
-						std::string_view menus[] = { "menu1", "menu2" , "menu3" , "menu4" , "menu_menu_menu_menu_5" };
-						ctx.begin_menubar();
+						static xui::menubar_model menubar_m = []()
 						{
-							if ( ctx.begin_menu( "menu1" ) )
-							{
-								std::cout << "menu1" << std::endl;
-							}
-							ctx.end_menu();
-							if ( ctx.begin_menu( "menu2" ) )
-							{
-								std::cout << "menu2" << std::endl;
-							}
-							ctx.end_menu();
-						}
-						ctx.end_menubar();
+							xui::menubar_model m;
+							xui::menubar_model::item item;
+
+							item.name = "menu1";
+							m.items.push_back( item );
+
+							item.name = "menu2";
+							m.items.push_back( item );
+							
+							return m;
+						}( );
+						ctx.menubar( &menubar_m );
 
 						ctx.push_rect( { 100, 100, 100, 100 } );
 						ctx.label( "·Ü¶·¾«Éñ¹ÄÀø" );

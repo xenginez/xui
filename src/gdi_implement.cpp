@@ -38,6 +38,12 @@ namespace
         }
 
     public:
+        void flush()
+        {
+
+        }
+
+    public:
         xui::vec2 _cursorpos = {};
         xui::vec2 _cursorold = {};
         xui::vec2 _cursorwheel = {};
@@ -282,6 +288,24 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         {
             std::cout << "WM_DESTROY" << std::endl;
             break;
+        }
+        else if ( msg.message == WM_LBUTTONDBLCLK )
+        {
+            set_event( id, xui::event::KEY_MOUSE_LEFT_DBCLICK, 1 );
+
+            std::cout << "WM_LBUTTONDBLCLK" << std::endl;
+        }
+        else if ( msg.message == WM_RBUTTONDBLCLK )
+        {
+            set_event( id, xui::event::KEY_MOUSE_RIGHT_DBCLICK, 1 );
+
+            std::cout << "WM_RBUTTONDBLCLK" << std::endl;
+        }
+        else if ( msg.message == WM_MBUTTONDBLCLK )
+        {
+            set_event( id, xui::event::KEY_MOUSE_MIDDLE_DBCLICK, 1 );
+
+            std::cout << "WM_MBUTTONDBLCLK" << std::endl;
         }
         else if ( msg.message == WM_LBUTTONDOWN )
         {
