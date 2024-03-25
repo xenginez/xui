@@ -36,14 +36,14 @@ int main()
 						static xui::menubar_model menubar_m = []()
 						{
 							xui::menubar_model m;
-							xui::menubar_model::item item;
 
-							item.name = "menu1";
-							m.items.push_back( item );
+							m.beg_menu( "menu1" );
+							m.add_item( "item1" );
+							m.end_menu();
+							m.beg_menu( "menu2" );
+							m.add_item( "item2" );
+							m.end_menu();
 
-							item.name = "menu2";
-							m.items.push_back( item );
-							
 							return m;
 						}( );
 						ctx.menubar( &menubar_m );

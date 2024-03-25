@@ -830,8 +830,8 @@ namespace xui
 		float scrollbar( xui::string_id str_id, float & value, float step, float min, float max, xui::direction dir = xui::direction::TOP_BOTTOM );
 
 	public:
-		bool menubar( item_model * model );
-		bool menubar( xui::string_id str_id, item_model * model );
+		bool menubar( xui::item_model * model );
+		bool menubar( xui::string_id str_id, xui::item_model * model );
 
 	public:
 		bool begin_combobox();
@@ -935,15 +935,38 @@ namespace xui
 
 	class item_model
 	{
+	private:
+		using variant = std::variant<std::monostate, bool, int, float, std::string, xui::string_id, xui::texture_id, xui::color, xui::filled, xui::alignment_flag>;
+
 	public:
-		using value_t = std::variant<std::monostate, bool, int, float, std::string_view, xui::texture_id, xui::color, xui::filled, xui::alignment_flag>;
+		struct value_t : public variant
+		{
+			using variant::variant;
+
+			template<typename T> T value( const T & def = {} )
+			{
+				if constexpr ( std::is_same_v<T, xui::string_id> )
+				{
+					if ( index() == 4 )
+						return std::get<std::string>( *this );
+
+					return std::get<T>( *this );
+				}
+				else
+				{
+					return std::get<T>( *this );
+				}
+
+				return def;
+			}
+		};
 
 	public:
 		virtual ~item_model() = default;
 
 	public:
 		virtual xui::string_id parent( xui::string_id id ) const = 0;
-		virtual bool exist( int row, int col, xui::string_id parent ) const = 0;
+		virtual bool item_exist( int row, int col, xui::string_id parent ) const = 0;
 		virtual xui::string_id index( int row, int col, xui::string_id parent ) const = 0;
 
 	public:
@@ -953,8 +976,8 @@ namespace xui
 		virtual void item_data( xui::string_id id, int role, const value_t & val ) = 0;
 
 	public:
-		virtual bool exist_row_header_data( int row ) const = 0;
-		virtual bool exist_col_header_data( int row ) const = 0;
+		virtual bool row_header_data_exist( int row ) const = 0;
+		virtual bool col_header_data_exist( int row ) const = 0;
 		virtual value_t row_header_data( int row, int role ) const = 0;
 		virtual value_t col_header_data( int col, int role ) const = 0;
 		virtual void row_header_data( int row, int role, const value_t & val ) = 0;
@@ -971,6 +994,7 @@ namespace xui
 		{
 			ICON,
 			NAME,
+			STRING_ID,
 			SHORTCUTS,
 			IS_MENU,
 			IS_SELECTED,
@@ -981,13 +1005,52 @@ namespace xui
 			bool menu = false;
 			bool selected = false;
 			xui::texture_id icon = xui::invalid_id;
-			std::string_view name = {};
-			std::string_view shortcuts = {};
+			std::string name = {};
+			std::string shortcuts = {};
 			std::vector<item> childrens;
 
 			std::string id;
 			xui::string_id parent;
 		};
+
+	public:
+		void beg_menu( std::string_view name, xui::texture_id icon = xui::invalid_id, std::string_view shortcuts = "" )
+		{
+			if ( stack.empty() )
+			{
+				items.push_back( {} );
+				stack.push_back( &items.back() );
+				stack.back()->parent = "";
+			}
+			else
+			{
+				auto id = stack.back()->id;
+				stack.back()->childrens.push_back( {} );
+				stack.push_back( &stack.back()->childrens.back() );
+				stack.back()->parent = id;
+			}
+
+			stack.back()->name = name;
+			stack.back()->icon = icon;
+			stack.back()->shortcuts = shortcuts;
+			stack.back()->id = std::format( "{}_{}", stack.back()->parent, name );
+		}
+		void add_item( std::string_view name, xui::texture_id icon = xui::invalid_id, std::string_view shortcuts = "" )
+		{
+			item i;
+			i.name = name;
+			i.icon = icon;
+			i.shortcuts = shortcuts;
+
+			i.id = std::format( "{}_{}", stack.back()->id, name );
+			i.parent = stack.back()->id;
+
+			stack.back()->childrens.emplace_back( std::move( i ) );
+		}
+		void end_menu()
+		{
+			stack.pop_back();
+		}
 
 	public:
 		xui::string_id parent( xui::string_id id ) const override
@@ -996,7 +1059,7 @@ namespace xui
 				return it->parent;
 			return {};
 		}
-		bool exist( int row, int col, xui::string_id parent ) const override
+		bool item_exist( int row, int col, xui::string_id parent ) const override
 		{
 			if ( auto it = find( parent ) )
 			{
@@ -1037,6 +1100,8 @@ namespace xui
 					return it->icon;
 				case xui::menubar_model::NAME:
 					return it->name;
+				case xui::menubar_model::STRING_ID:
+					return it->id;
 				case xui::menubar_model::SHORTCUTS:
 					return it->shortcuts;
 				case xui::menubar_model::IS_MENU:
@@ -1059,11 +1124,11 @@ namespace xui
 		}
 
 	public:
-		bool exist_row_header_data( int row ) const override
+		bool row_header_data_exist( int row ) const override
 		{
 			return false;
 		}
-		bool exist_col_header_data( int row ) const override
+		bool col_header_data_exist( int row ) const override
 		{
 			return row < items.size();
 		}
@@ -1083,6 +1148,8 @@ namespace xui
 					return it->icon;
 				case xui::menubar_model::NAME:
 					return it->name;
+				case xui::menubar_model::STRING_ID:
+					return it->id;
 				case xui::menubar_model::SHORTCUTS:
 					return it->shortcuts;
 				case xui::menubar_model::IS_MENU:
@@ -1102,7 +1169,7 @@ namespace xui
 			{
 				if ( col < items.size() )
 				{
-					items[col].selected = std::get<bool>(val);
+					items[col].selected = std::get<bool>( val );
 				}
 			}
 		}
@@ -1116,6 +1183,7 @@ namespace xui
 
 	public:
 		std::vector<item> items;
+		std::vector<item *> stack;
 		std::map<xui::string_id, item *> map;
 	};
 
