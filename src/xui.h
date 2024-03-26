@@ -832,6 +832,7 @@ namespace xui
 	public:
 		bool menubar( xui::item_model * model );
 		bool menubar( xui::string_id str_id, xui::item_model * model );
+		bool draw_menubar_item( int row, int col, xui::string_id parent, xui::item_model * model );
 
 	public:
 		bool begin_combobox();
@@ -936,7 +937,7 @@ namespace xui
 	class item_model
 	{
 	private:
-		using variant = std::variant<std::monostate, bool, int, float, std::string, xui::string_id, xui::texture_id, xui::color, xui::filled, xui::alignment_flag>;
+		using variant = std::variant<std::monostate, bool, int, float, std::string, xui::texture_id, xui::color, xui::filled, xui::alignment_flag>;
 
 	public:
 		struct value_t : public variant
@@ -945,19 +946,7 @@ namespace xui
 
 			template<typename T> T value( const T & def = {} )
 			{
-				if constexpr ( std::is_same_v<T, xui::string_id> )
-				{
-					if ( index() == 4 )
-						return std::get<std::string>( *this );
-
-					return std::get<T>( *this );
-				}
-				else
-				{
-					return std::get<T>( *this );
-				}
-
-				return def;
+				return std::get<T>( *this );
 			}
 		};
 
@@ -992,9 +981,9 @@ namespace xui
 	public:
 		enum item_role
 		{
+			ID,
 			ICON,
 			NAME,
-			STRING_ID,
 			SHORTCUTS,
 			IS_MENU,
 			IS_SELECTED,
@@ -1021,19 +1010,20 @@ namespace xui
 				items.push_back( {} );
 				stack.push_back( &items.back() );
 				stack.back()->parent = "";
+				stack.back()->id = name;
 			}
 			else
 			{
-				auto id = stack.back()->id;
+				auto pid = stack.back()->id;
 				stack.back()->childrens.push_back( {} );
 				stack.push_back( &stack.back()->childrens.back() );
-				stack.back()->parent = id;
+				stack.back()->parent = pid;
+				stack.back()->id = std::format( "{}_{}", pid, name );
 			}
 
 			stack.back()->name = name;
 			stack.back()->icon = icon;
 			stack.back()->shortcuts = shortcuts;
-			stack.back()->id = std::format( "{}_{}", stack.back()->parent, name );
 		}
 		void add_item( std::string_view name, xui::texture_id icon = xui::invalid_id, std::string_view shortcuts = "" )
 		{
@@ -1096,12 +1086,12 @@ namespace xui
 			{
 				switch ( role )
 				{
+				case xui::menubar_model::ID:
+					return it->id;
 				case xui::menubar_model::ICON:
 					return it->icon;
 				case xui::menubar_model::NAME:
 					return it->name;
-				case xui::menubar_model::STRING_ID:
-					return it->id;
 				case xui::menubar_model::SHORTCUTS:
 					return it->shortcuts;
 				case xui::menubar_model::IS_MENU:
@@ -1144,12 +1134,12 @@ namespace xui
 				
 				switch ( role )
 				{
+				case xui::menubar_model::ID:
+					return it->id;
 				case xui::menubar_model::ICON:
 					return it->icon;
 				case xui::menubar_model::NAME:
 					return it->name;
-				case xui::menubar_model::STRING_ID:
-					return it->id;
 				case xui::menubar_model::SHORTCUTS:
 					return it->shortcuts;
 				case xui::menubar_model::IS_MENU:
@@ -1177,14 +1167,43 @@ namespace xui
 	private:
 		item * find( xui::string_id id ) const
 		{
-			auto it = map.find( id );
-			return it != map.end() ? it->second : nullptr;
+			item * result = nullptr;
+
+			auto beg = id.begin();
+			auto it = id.begin();
+
+			while ( it != id.end() )
+			{
+				while ( it != id.end() && *it != '_' ) ++it;
+
+				std::string_view name{ beg, it };
+
+				if ( it != id.end() ) ++it;
+
+				beg = it;
+
+				if ( result == nullptr )
+				{
+					auto it2 = std::find_if( items.begin(), items.end(), [&]( const auto & val ) { return val.name == name; } );
+					if ( it2 == items.end() )
+						return nullptr;
+					result = it2.operator->();
+				}
+				else
+				{
+					auto it2 = std::find_if( result->childrens.begin(), result->childrens.end(), [&]( const auto & val ) { return val.name == name; } );
+					if ( it2 == result->childrens.end() )
+						return nullptr;
+					result = it2.operator->();
+				}
+			}
+
+			return result;
 		}
 
 	public:
-		std::vector<item> items;
 		std::vector<item *> stack;
-		std::map<xui::string_id, item *> map;
+		mutable std::vector<item> items;
 	};
 
 

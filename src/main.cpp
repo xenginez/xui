@@ -38,10 +38,10 @@ int main()
 							xui::menubar_model m;
 
 							m.beg_menu( "menu1" );
-							m.add_item( "item1" );
+							m.add_item( "item1 item1" );
 							m.end_menu();
 							m.beg_menu( "menu2" );
-							m.add_item( "item2" );
+							m.add_item( "item2 item2" );
 							m.end_menu();
 
 							return m;

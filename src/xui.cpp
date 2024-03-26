@@ -1248,6 +1248,12 @@ R"(
         filled: filled( solid, rgb( 76, 74, 72 ) );
         border: border( solid, 1, transparent, vec4( 0, 0, 0, 0 ) );
     },
+    menubar:hover{
+        filled: filled( solid, green );
+    },
+    menubar:active{
+        filled: filled( solid, darkgray );
+    },
     menubar-list{
     },
     menubar-item{
@@ -1904,9 +1910,9 @@ bool xui::context::image( xui::texture_id id )
 
 bool xui::context::image( xui::string_id str_id, xui::texture_id id )
 {
-    draw_string_id( str_id, [&]()
+    draw_style_type( "image", [&]()
     {
-        draw_style_type( "image", [&]()
+        draw_string_id( str_id, [&]()
         {
             draw_image( id, currrent_rect() );
         } );
@@ -1921,9 +1927,9 @@ bool xui::context::label( std::string_view text )
 
 bool xui::context::label( xui::string_id str_id, std::string_view text )
 {
-    draw_string_id( str_id, [&]()
+    draw_style_type( "label", [&]()
     {
-        draw_style_type( "label", [&]()
+        draw_string_id( str_id, [&]()
         {
             draw_text( text, current_font(), currrent_rect(), current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
         } );
@@ -1938,14 +1944,14 @@ bool xui::context::radio( bool & checked )
 
 bool xui::context::radio( xui::string_id str_id, bool & checked )
 {
-    draw_string_id( str_id, [&]()
+    draw_style_type( "radio", [&]()
     {
-        auto id = current_window_id();
-        auto rect = currrent_rect();
-        float raduis = std::min( rect.w, rect.h ) / 2;
-
-        draw_style_type( "radio", [&]()
+        draw_string_id( str_id, [&]()
         {
+            auto id = current_window_id();
+            auto rect = currrent_rect();
+            float raduis = std::min( rect.w, rect.h ) / 2;
+
             std::string_view action = get_action_name();
             if ( action == "active" )
                 checked = !checked;
@@ -1977,15 +1983,15 @@ bool xui::context::check( bool & checked )
 
 bool xui::context::check( xui::string_id str_id, bool & checked )
 {
-    draw_string_id( str_id, [&]()
+    draw_style_type( "check", [&]()
     {
-        auto id = current_window_id();
-        auto rect = currrent_rect();
-        rect.w = std::min( rect.w, rect.h );
-        rect.h = rect.w;
-
-        draw_style_type( "check", [&]()
+        draw_string_id( str_id, [&]()
         {
+            auto id = current_window_id();
+            auto rect = currrent_rect();
+            rect.w = std::min( rect.w, rect.h );
+            rect.h = rect.w;
+
             std::string_view action = get_action_name();
             if ( action == "active" ) checked = !checked;
 
@@ -2021,13 +2027,13 @@ bool xui::context::button( xui::string_id str_id, std::string_view text )
 {
     std::string_view action;
 
-    draw_string_id( str_id, [&]()
+    draw_style_type( "button", [&]()
     {
-        auto id = current_window_id();
-        auto rect = currrent_rect();
-
-        draw_style_type( "button", [&]()
+        draw_string_id( str_id, [&]()
         {
+            auto id = current_window_id();
+            auto rect = currrent_rect();
+
             action = get_action_name();
 
             draw_style_action( action, [&]()
@@ -2058,12 +2064,11 @@ float xui::context::slider( float & value, float min, float max )
 
 float xui::context::slider( xui::string_id str_id, float & value, float min, float max )
 {
-    draw_string_id( str_id, [&]()
+    draw_style_type( "slider", [&]()
     {
-        auto id = current_window_id();
-
-        draw_style_type( "slider", [&]()
+        draw_string_id( str_id, [&]()
         {
+            auto id = current_window_id();
             auto back_rect = currrent_rect();
             xui::vec2 pos = _p->_impl->get_cursor_pos( id );
             std::string_view action = get_action_name( action_focus_type );
@@ -2177,9 +2182,9 @@ bool xui::context::process( float value, float min, float max, std::string_view 
 
 bool xui::context::process( xui::string_id str_id, float value, float min, float max, std::string_view text )
 {
-    draw_string_id( str_id, [&]()
+    draw_style_type( "process", [&]()
     {
-        draw_style_type( "process", [&]()
+        draw_string_id( str_id, [&]()
         {
             auto back_rect = currrent_rect();
 
@@ -2230,13 +2235,12 @@ float xui::context::scrollbar( float & value, float step, float min, float max, 
 
 float xui::context::scrollbar( xui::string_id str_id, float & value, float step, float min, float max, xui::direction dir )
 {
-    draw_string_id( str_id, [&]()
+    draw_style_type( "scrollbar", [&]()
     {
-        auto id = current_window_id();
-        std::string_view action;
-
-        draw_style_type( "scrollbar", [&]()
+        draw_string_id( str_id, [&]()
         {
+            auto id = current_window_id();
+            std::string_view action;
             auto back_rect = currrent_rect();
             xui::vec2 pos = _p->_impl->get_cursor_pos( id );
             float arrow_radius = std::min( back_rect.w, back_rect.h );
@@ -2487,11 +2491,6 @@ bool xui::context::menubar( xui::item_model * model )
 
 bool xui::context::menubar( xui::string_id str_id, xui::item_model * model )
 {
-    auto draw_item = []( int row, int col, xui::string_id parent, xui::item_model * model )
-    {
-
-    };
-
     draw_style_type( "menubar", [&]()
     {
         draw_string_id( str_id, [&]()
@@ -2502,15 +2501,15 @@ bool xui::context::menubar( xui::string_id str_id, xui::item_model * model )
             {
                 draw_rect( menubar_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
-                for ( int i = 0; i < INT_MAX; i++ )
+                for ( int col = 0; col < INT_MAX; col++ )
                 {
-                    if ( model->col_header_data_exist( i ) == false )
+                    if ( model->col_header_data_exist( col ) == false )
                         break;
 
-                    auto id = model->col_header_data( i, menubar_model::STRING_ID ).value<xui::string_id>();
-                    auto icon = model->col_header_data( i, menubar_model::ICON ).value<xui::texture_id>();
-                    auto name = model->col_header_data( i, menubar_model::NAME ).value<std::string>();
-                    auto select = model->col_header_data( i, menubar_model::IS_SELECTED ).value<bool>();
+                    auto id = model->col_header_data( col, menubar_model::ID ).value<std::string>();
+                    auto icon = model->col_header_data( col, menubar_model::ICON ).value<xui::texture_id>();
+                    auto name = model->col_header_data( col, menubar_model::NAME ).value<std::string>();
+                    auto select = model->col_header_data( col, menubar_model::IS_SELECTED ).value<bool>();
 
                     auto name_size = _p->_impl->font_size( current_font(), name );
                     xui::rect item_rect = { menubar_rect.x, menubar_rect.y, 0, 30 };
@@ -2520,29 +2519,26 @@ bool xui::context::menubar( xui::string_id str_id, xui::item_model * model )
 
                     item_rect.w += name_size.w;
 
-                    draw_style_element( "item", [&]()
+                    draw_string_id( id, [&]()
                     {
-                        draw_string_id( id, [&]()
+                        draw_rect( item_rect, [&]()
                         {
-                            draw_rect( item_rect, [&]()
+                            std::string_view action = get_action_name( action_menu_type );
+                            select = action == "active";
+
+                            draw_style_action( action, [&]()
                             {
-                                std::string_view action = get_action_name( action_menu_type );
-                                select = action == "active";
+                                draw_rect( item_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
-                                draw_style_action( action, [&]()
+                                float x = item_rect.x;
+
+                                if ( icon != xui::invalid_id )
                                 {
-                                    draw_rect( item_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                                    draw_image( icon, { x, item_rect.y, item_rect.h, item_rect.h } );
+                                    x += item_rect.h;
+                                }
 
-                                    float x = item_rect.x;
-
-                                    if ( icon != xui::invalid_id )
-                                    {
-                                        draw_image( icon, { x, item_rect.y, item_rect.h, item_rect.h } );
-                                        x += item_rect.h;
-                                    }
-
-                                    draw_text( name, current_font(), { x, item_rect.y, name_size.w, item_rect.h }, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
-                                } );
+                                draw_text( name, current_font(), { x, item_rect.y, name_size.w, item_rect.h }, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
                             } );
                         } );
                     } );
@@ -2551,11 +2547,13 @@ bool xui::context::menubar( xui::string_id str_id, xui::item_model * model )
                     {
                         int count = 0;
                         float maxw = 0;
-                        while ( model->item_exist( count, i, id ) )
+                        while ( model->item_exist( count, col, id ) )
                         {
-                            auto cid = model->index( count, i, id );
+                            auto cid = model->index( count, col, id );
                             float w = _p->_impl->font_size( current_font(), model->item_data( cid, xui::menubar_model::NAME ).value<std::string>() ).w;
                             if ( model->item_data( cid, xui::menubar_model::ICON ).value<xui::texture_id>() != xui::invalid_id ) w += 30;
+                            if ( model->item_data( cid, xui::menubar_model::IS_MENU ).value<bool>() ) w += 30;
+                            
                             maxw = std::max( maxw, w );
 
                             count++;
@@ -2563,20 +2561,50 @@ bool xui::context::menubar( xui::string_id str_id, xui::item_model * model )
 
                         if ( count > 0 )
                         {
-                            xui::rect list_rect = { item_rect.x, item_rect.y + item_rect.h, maxw, count * 30 };
+                            xui::rect list_rect = { item_rect.x, item_rect.y + item_rect.h, maxw, count * 30.0f };
+
                             draw_style_element( "list", [&]()
-                            {} );
+                            {
+                                draw_rect( list_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                            } );
+
+                            for ( int row = 0; row < count; row++ )
+                            {
+                                xui::rect sub_item_rect = { list_rect.x, list_rect.y + row * 30, list_rect.w, 30 };
+                                draw_rect( sub_item_rect, [&]()
+                                {
+                                    draw_menubar_item( row, col, id, model );
+                                } );
+                            }
                         }
-
-                        draw_item( 0, i, id, model );
                     }
-
 
                     menubar_rect = menubar_rect.margins_added( item_rect.w, 0, 0, 0 );
                 }
             } );
         } );
     } );
+    return false;
+}
+
+bool xui::context::draw_menubar_item( int row, int col, xui::string_id parent, xui::item_model * model )
+{
+    auto id = model->index( row, col, parent );
+    auto icon = model->item_data( id, menubar_model::ICON ).value<xui::texture_id>();
+    auto name = model->item_data( id, menubar_model::NAME ).value<std::string>();
+    auto menu = model->item_data( id, menubar_model::IS_MENU ).value<bool>();
+    auto select = model->item_data( id, menubar_model::IS_SELECTED ).value<bool>();
+
+    draw_style_element( "item", [&]()
+    {
+        draw_string_id( id, [&]()
+        {
+
+        } );
+    } );
+
+    if( menu )
+
     return false;
 }
 
