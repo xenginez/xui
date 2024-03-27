@@ -7,38 +7,12 @@
 #include <algorithm>
 #include <iostream>
 
-#define XUI_ERR( CODE )  if ( _p->_error ) _p->_error( this, xui_category::make_error_code( xui::err::CODE ) );
 #define XUI_SCALE( VAL ) ( VAL * _p->_factor )
 
 namespace
 {
-    static constexpr int action_nil_type = 0;
-    static constexpr int action_menu_type = 1;
-    static constexpr int action_focus_type = 2;
     static std::regex int_regex{ R"([-+]?([0-9]*[0-9]+))" };
     static std::regex flt_regex{ R"([-+]?([0-9]*.[0-9]+|[0-9]+))" };
-
-    class xui_category : public std::error_category
-    {
-    public:
-        const char * name() const noexcept override
-        {
-            return "xui::category";
-        }
-        std::string message( int value ) const override
-        {
-
-
-            return "";
-        }
-
-        template<typename T > static std::error_code make_error_code( T code )
-        {
-            static xui_category category;
-
-            return std::error_code( (int)code, category );
-        }
-    };
 
     struct style_type
     {
@@ -55,15 +29,6 @@ namespace
         std::pmr::deque<std::string> elements;
         std::pmr::deque<std::string> actions;
     };
-    struct focus_type
-    {
-        int type = 0;
-        xui::rect rect;
-        std::string name;
-        xui::window_id id = xui::invalid_id;
-        xui::event event = xui::event::EVENT_MAX_COUNT;
-    };
-
     struct window_type
     {
         int flags;
@@ -1118,7 +1083,6 @@ public:
         , _disables( res )
         , _infos( res )
         , _rects( res )
-        , _focus( res )
         , _types( res )
         , _fonts( res )
         , _styles( res )
@@ -1131,7 +1095,6 @@ public:
 public:
     float _factor = 1.0f;
     xui::implement * _impl = nullptr;
-    error_callback_type _error = nullptr;
     std::pmr::memory_resource * _res = nullptr;
 
 public:
@@ -1143,7 +1106,6 @@ public:
     std::pmr::deque<bool> _disables;
     std::pmr::deque<info_type> _infos;
     std::pmr::deque<xui::rect> _rects;
-    std::pmr::deque<focus_type> _focus;
     std::pmr::deque<style_type> _types;
     std::pmr::deque<xui::font_id> _fonts;
     std::pmr::deque<xui::style *> _styles;
@@ -1404,9 +1366,41 @@ void xui::context::set_scale( float factor )
     _p->_factor = factor;
 }
 
-void xui::context::set_error( const xui::error_callback_type & callback )
+std::string_view xui::context::current_event_status( bool * selected )
 {
-    _p->_error = callback;
+    auto id = current_window_id();
+    auto rect = current_rect();
+    auto pos = _p->_impl->get_cursor_pos( id );
+
+    std::string_view action;
+
+    if ( current_disable() )
+    {
+        action = "disable";
+    }
+    else if ( selected != nullptr && *selected == true )
+    {
+        action = "active";
+    }
+    else if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && rect.contains( pos ) )
+    {
+        action = "active";
+    }
+    else if ( _p->_impl->get_event( id, xui::event::WINDOW_ACTIVE ) && rect.contains( pos ) )
+    {
+        action = "hover";
+    }
+    else
+    {
+        action = "normal";
+    }
+
+    if ( selected != nullptr )
+    {
+        *selected = ( action == "active" );
+    }
+
+    return action;
 }
 
 void xui::context::push_style( xui::style * style )
@@ -1419,9 +1413,36 @@ void xui::context::pop_style()
     _p->_styles.pop_back();
 }
 
+std::string xui::context::current_style_name() const
+{
+    std::string result;
+
+    if ( !_p->_strids.empty() )
+    {
+        result.append( _p->_strids.back() );
+        result.append( "#" );
+    }
+
+    result.append( _p->_types.back().type.begin(), _p->_types.back().type.end() );
+
+    for ( const auto & it : _p->_types.back().elements )
+    {
+        result.append( "-" );
+        result.append( it );
+    }
+
+    if ( !_p->_types.back().actions.empty() )
+    {
+        result.append( ":" );
+        result.append( _p->_types.back().actions.back() );
+    }
+
+    return result;
+}
+
 xui::style::variant xui::context::current_style( std::string_view attr ) const
 {
-    std::string name = style_name();
+    std::string name = current_style_name();
 
     name.append( "@" );
     name.append( attr );
@@ -1436,9 +1457,9 @@ xui::style::variant xui::context::current_style( std::string_view attr ) const
     return {};
 }
 
-void xui::context::push_style_type( std::string_view type )
+void xui::context::push_style_type( std::string_view name )
 {
-    _p->_types.push_back( { type.begin(), type.end(), _p->_res } );
+    _p->_types.push_back( { name.begin(), name.end(), _p->_res } );
 }
 
 void xui::context::pop_style_type()
@@ -1451,9 +1472,9 @@ std::string_view xui::context::current_style_type() const
     return _p->_types.back().type;
 }
 
-void xui::context::push_style_element( std::string_view element )
+void xui::context::push_style_element( std::string_view name )
 {
-    _p->_types.back().elements.push_back( { element.begin(), element.end() } );
+    _p->_types.back().elements.push_back( { name.begin(), name.end() } );
 }
 
 void xui::context::pop_style_element()
@@ -1466,66 +1487,19 @@ std::string_view xui::context::current_style_element() const
     return _p->_types.back().elements.back();
 }
 
-void xui::context::push_style_action( std::string_view action )
+void xui::context::push_style_status( std::string_view name )
 {
-    _p->_types.back().actions.push_back( { action.begin(), action.end() } );
+    _p->_types.back().actions.push_back( { name.begin(), name.end() } );
 }
 
-void xui::context::pop_style_action()
+void xui::context::pop_style_status()
 {
     _p->_types.back().actions.pop_back();
 }
 
-std::string_view xui::context::current_style_action() const
+std::string_view xui::context::current_style_status() const
 {
     return _p->_types.back().actions.back();
-}
-
-void xui::context::push_font( xui::font_id font )
-{
-    _p->_fonts.push_back( font );
-}
-
-void xui::context::pop_font()
-{
-    _p->_fonts.pop_back();
-}
-
-xui::font_id xui::context::current_font() const
-{
-    if ( _p->_fonts.empty() )
-    {
-        XUI_ERR( ERR_NO );
-        return xui::invalid_id;
-    }
-
-    return _p->_fonts.back();
-}
-
-void xui::context::push_rect( const xui::rect & rect )
-{
-    _p->_rects.push_back( rect );
-}
-
-void xui::context::margins_currrent_rect( float left, float right, float top, float bottom )
-{
-    _p->_rects.back() = _p->_rects.back().margins_added( left, right, top, bottom );
-}
-
-void xui::context::pop_rect()
-{
-    _p->_rects.pop_back();
-}
-
-xui::rect xui::context::currrent_rect() const
-{
-    if ( _p->_rects.empty() )
-    {
-        XUI_ERR( ERR_NO );
-        return {};
-    }
-
-    return _p->_rects.back();
 }
 
 void xui::context::push_disable( bool val )
@@ -1546,25 +1520,49 @@ bool xui::context::current_disable() const
     return _p->_disables.back();
 }
 
-void xui::context::push_string_id( xui::string_id id )
+void xui::context::push_rect( const xui::rect & rect )
 {
-    _p->_strids.push_back( { id.begin(), id.end() } );
+    _p->_rects.push_back( rect );
 }
 
-void xui::context::pop_string_id()
+void xui::context::pop_rect()
 {
-    _p->_strids.pop_back();
+    _p->_rects.pop_back();
 }
 
-xui::string_id xui::context::current_string_id() const
+xui::rect xui::context::current_rect() const
 {
-    if ( _p->_strids.empty() )
+    if ( _p->_rects.empty() )
     {
-        XUI_ERR( ERR_NO );
         return {};
     }
 
-    return _p->_strids.back();
+    return _p->_rects.back();
+}
+
+void xui::context::push_font_id( xui::font_id font )
+{
+    _p->_fonts.push_back( font );
+}
+
+void xui::context::pop_font_id()
+{
+    _p->_fonts.pop_back();
+}
+
+xui::font_id xui::context::current_font_id() const
+{
+    if ( _p->_fonts.empty() )
+    {
+        return xui::invalid_id;
+    }
+
+    return _p->_fonts.back();
+}
+
+void xui::context::margins_current_rect( float left, float right, float top, float bottom )
+{
+    _p->_rects.back() = _p->_rects.back().margins_added( left, right, top, bottom );
 }
 
 void xui::context::push_window_id( xui::window_id id )
@@ -1581,7 +1579,6 @@ xui::window_id xui::context::current_window_id() const
 {
     if ( _p->_windows.empty() )
     {
-        XUI_ERR( ERR_NO );
         return xui::invalid_id;
     }
 
@@ -1602,56 +1599,36 @@ xui::texture_id xui::context::current_texture_id() const
 {
     if ( _p->_textures.empty() )
     {
-        XUI_ERR( ERR_NO );
         return xui::invalid_id;
     }
 
     return _p->_textures.back();
 }
 
+void xui::context::push_element_id( xui::element_id id )
+{
+    _p->_strids.push_back( { id.begin(), id.end() } );
+}
+
+void xui::context::pop_element_id()
+{
+    _p->_strids.pop_back();
+}
+
+xui::element_id xui::context::current_element_id() const
+{
+    if ( _p->_strids.empty() )
+    {
+        return {};
+    }
+
+    return _p->_strids.back();
+}
+
 void xui::context::begin()
 {
     _p->_str_id = 0;
     _p->_commands.clear();
-
-    while ( !_p->_focus.empty() )
-    {
-        if ( _p->_focus.back().type == action_focus_type )
-        {
-            if ( _p->_focus.back().event >= xui::event::KEY_EVENT_BEG && _p->_focus.back().event <= xui::event::KEY_EVENT_END )
-            {
-
-            }
-            else if ( _p->_focus.back().event >= xui::event::MOUSE_EVENT_BEG && _p->_focus.back().event <= xui::event::MOUSE_EVENT_END )
-            {
-                if ( _p->_impl->get_event( _p->_focus.back().id, _p->_focus.back().event ) == 0 )
-                {
-                    _p->_focus.pop_back();
-                    continue;
-                }
-            }
-            else if ( _p->_focus.back().event >= xui::event::GAMEPAD_EVENT_BEG && _p->_focus.back().event <= xui::event::GAMEPAD_EVENT_END )
-            {
-
-            }
-        }
-        else if ( _p->_focus.back().type == action_menu_type )
-        {
-            if ( _p->_focus.back().event >= xui::event::MOUSE_EVENT_BEG && _p->_focus.back().event <= xui::event::MOUSE_EVENT_END )
-            {
-                if ( _p->_impl->get_event( _p->_focus.back().id, _p->_focus.back().event ) == 1 )
-                {
-                    if ( !_p->_focus.back().rect.contains( _p->_impl->get_cursor_pos( _p->_focus.back().id ) ) )
-                    {
-                        _p->_focus.pop_back();
-                        continue;
-                    }
-                }
-            }
-        }
-
-        break;
-    }
 }
 
 std::span<xui::drawcmd> xui::context::end()
@@ -1676,9 +1653,9 @@ bool xui::context::begin_window( std::string_view title, xui::texture_id icon_id
     return begin_window( std::format( "_window_{}", _p->_str_id++ ), title, icon_id, flags );
 }
 
-bool xui::context::begin_window( xui::string_id str_id, std::string_view title, xui::texture_id icon_id, int flags )
+bool xui::context::begin_window( xui::element_id eid, std::string_view title, xui::texture_id icon_id, int flags )
 {
-    push_string_id( str_id );
+    push_element_id( eid );
     {
         window_type t;
         t.flags = flags;
@@ -1688,7 +1665,7 @@ bool xui::context::begin_window( xui::string_id str_id, std::string_view title, 
     }
 
     auto id = current_window_id();
-    auto wrect = currrent_rect();
+    auto wrect = current_rect();
     auto cursorpos = _p->_impl->get_cursor_pos( id );
 
     wrect.x = 0; wrect.y = 0;
@@ -1726,11 +1703,11 @@ void xui::context::end_window()
     auto t = std::get<window_type>( _p->_infos.back() );
     _p->_infos.pop_back();
 
-    pop_string_id();
+    pop_element_id();
     pop_rect();
 
     auto id = current_window_id();
-    auto wrect = currrent_rect();
+    auto wrect = current_rect();
     auto cursorpos = _p->_impl->get_cursor_pos( id );
 
     wrect.x = 0; wrect.y = 0;
@@ -1758,7 +1735,7 @@ void xui::context::end_window()
 
                     draw_style_element( "title", [&]()
                     {
-                        draw_text( t.title, current_font(), { 30, 5, wrect.w - 150, 20 }, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
+                        draw_text( t.title, current_font_id(), { 30, 5, wrect.w - 150, 20 }, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
                     } );
 
                     xui::rect box_rect = { title_rect.w, title_rect.y, 50, title_rect.h };
@@ -1771,8 +1748,8 @@ void xui::context::end_window()
                         {
                             draw_rect( box_rect, [&]()
                             {
-                                std::string_view action = get_action_name();
-                                draw_style_action( action, [&]()
+                                std::string_view action = current_event_status();
+                                draw_style_status( action, [&]()
                                 {
                                     draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
@@ -1799,8 +1776,8 @@ void xui::context::end_window()
                         {
                             draw_rect( box_rect, [&]()
                             {
-                                std::string_view action = get_action_name();
-                                draw_style_action( action, [&]()
+                                std::string_view action = current_event_status();
+                                draw_style_status( action, [&]()
                                 {
                                     draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
@@ -1846,8 +1823,8 @@ void xui::context::end_window()
                         {
                             draw_rect( box_rect, [&]()
                             {
-                                std::string_view action = get_action_name();
-                                draw_style_action( action, [&]()
+                                std::string_view action = current_event_status();
+                                draw_style_status( action, [&]()
                                 {
                                     draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
@@ -1867,7 +1844,7 @@ void xui::context::end_window()
                     {
                         draw_rect( move_rect, [&]()
                         {
-                            if ( get_action_name( action_focus_type ) == "active" )
+                            if ( current_event_status() == "active" )
                             {
                                 auto wr = _p->_impl->get_window_rect( id );
                                 auto dt = _p->_impl->get_cursor_dt( id );
@@ -1883,7 +1860,7 @@ void xui::context::end_window()
                 {
                     draw_rect( resize_rect, [&]()
                     {
-                        if ( get_action_name( action_focus_type ) == "active" )
+                        if ( current_event_status() == "active" )
                         {
                             auto wr = _p->_impl->get_window_rect( id );
                             auto dt = _p->_impl->get_cursor_dt( id );
@@ -1908,13 +1885,13 @@ bool xui::context::image( xui::texture_id id )
     return image( std::format( "_image_{}", _p->_str_id++ ), id );
 }
 
-bool xui::context::image( xui::string_id str_id, xui::texture_id id )
+bool xui::context::image( xui::element_id eid, xui::texture_id id )
 {
     draw_style_type( "image", [&]()
     {
-        draw_string_id( str_id, [&]()
+        draw_element_id( eid, [&]()
         {
-            draw_image( id, currrent_rect() );
+            draw_image( id, current_rect() );
         } );
     } );
     return true;
@@ -1925,13 +1902,13 @@ bool xui::context::label( std::string_view text )
     return label( std::format( "_label_{}", _p->_str_id++ ), text );
 }
 
-bool xui::context::label( xui::string_id str_id, std::string_view text )
+bool xui::context::label( xui::element_id eid, std::string_view text )
 {
     draw_style_type( "label", [&]()
     {
-        draw_string_id( str_id, [&]()
+        draw_element_id( eid, [&]()
         {
-            draw_text( text, current_font(), currrent_rect(), current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
+            draw_text( text, current_font_id(), current_rect(), current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
         } );
     } );
     return true;
@@ -1942,21 +1919,21 @@ bool xui::context::radio( bool & checked )
     return radio( std::format( "_radio_{}", _p->_str_id++ ), checked );
 }
 
-bool xui::context::radio( xui::string_id str_id, bool & checked )
+bool xui::context::radio( xui::element_id eid, bool & checked )
 {
     draw_style_type( "radio", [&]()
     {
-        draw_string_id( str_id, [&]()
+        draw_element_id( eid, [&]()
         {
             auto id = current_window_id();
-            auto rect = currrent_rect();
+            auto rect = current_rect();
             float raduis = std::min( rect.w, rect.h ) / 2;
 
-            std::string_view action = get_action_name();
+            std::string_view action = current_event_status();
             if ( action == "active" )
                 checked = !checked;
 
-            draw_style_action( action, [&]()
+            draw_style_status( action, [&]()
             {
                 draw_circle( { rect.x + raduis, rect.y + raduis }, raduis, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
             } );
@@ -1965,7 +1942,7 @@ bool xui::context::radio( xui::string_id str_id, bool & checked )
             {
                 draw_style_element( "indicator", [&]()
                 {
-                    draw_style_action( action, [&]()
+                    draw_style_status( action, [&]()
                     {
                         draw_circle( { rect.x + raduis, rect.y + raduis }, ( raduis * 0.7f ), current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
                     } );
@@ -1981,21 +1958,21 @@ bool xui::context::check( bool & checked )
     return check( std::format( "_check_{}", _p->_str_id++ ), checked );
 }
 
-bool xui::context::check( xui::string_id str_id, bool & checked )
+bool xui::context::check( xui::element_id eid, bool & checked )
 {
     draw_style_type( "check", [&]()
     {
-        draw_string_id( str_id, [&]()
+        draw_element_id( eid, [&]()
         {
             auto id = current_window_id();
-            auto rect = currrent_rect();
+            auto rect = current_rect();
             rect.w = std::min( rect.w, rect.h );
             rect.h = rect.w;
 
-            std::string_view action = get_action_name();
+            std::string_view action = current_event_status();
             if ( action == "active" ) checked = !checked;
 
-            draw_style_action( action, [&]()
+            draw_style_status( action, [&]()
             {
                 draw_rect( rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
             } );
@@ -2004,7 +1981,7 @@ bool xui::context::check( xui::string_id str_id, bool & checked )
             {
                 draw_style_element( "indicator", [&]()
                 {
-                    draw_style_action( action, [&]()
+                    draw_style_status( action, [&]()
                     {
                         draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
                             .moveto( { rect.x + ( rect.w * 0.2f ), rect.y + ( rect.h * 0.5f ) } )
@@ -2023,20 +2000,20 @@ bool xui::context::button( std::string_view text )
     return button( std::format( "_button_{}", _p->_str_id++ ), text );
 }
 
-bool xui::context::button( xui::string_id str_id, std::string_view text )
+bool xui::context::button( xui::element_id eid, std::string_view text )
 {
     std::string_view action;
 
     draw_style_type( "button", [&]()
     {
-        draw_string_id( str_id, [&]()
+        draw_element_id( eid, [&]()
         {
             auto id = current_window_id();
-            auto rect = currrent_rect();
+            auto rect = current_rect();
 
-            action = get_action_name();
+            action = current_event_status();
 
-            draw_style_action( action, [&]()
+            draw_style_status( action, [&]()
             {
                 draw_rect( rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
             } );
@@ -2045,9 +2022,9 @@ bool xui::context::button( xui::string_id str_id, std::string_view text )
             {
                 draw_style_element( "text", [&]()
                 {
-                    draw_style_action( action, [&]()
+                    draw_style_status( action, [&]()
                     {
-                        draw_text( text, current_font(), rect, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
+                        draw_text( text, current_font_id(), rect, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
                     } );
                 } );
             }
@@ -2057,23 +2034,23 @@ bool xui::context::button( xui::string_id str_id, std::string_view text )
     return action == "active";
 }
 
-float xui::context::slider( float & value, float min, float max )
+float xui::context::slider( bool & selected, float & value, float min, float max )
 {
-    return slider( std::format( "_slider_{}", _p->_str_id++ ), value, min, max );
+    return slider( std::format( "_slider_{}", _p->_str_id++ ), selected, value, min, max );
 }
 
-float xui::context::slider( xui::string_id str_id, float & value, float min, float max )
+float xui::context::slider( xui::element_id eid, bool & selected, float & value, float min, float max )
 {
     draw_style_type( "slider", [&]()
     {
-        draw_string_id( str_id, [&]()
+        draw_element_id( eid, [&]()
         {
             auto id = current_window_id();
-            auto back_rect = currrent_rect();
+            auto back_rect = current_rect();
             xui::vec2 pos = _p->_impl->get_cursor_pos( id );
-            std::string_view action = get_action_name( action_focus_type );
+            std::string_view action = current_event_status( &selected );
 
-            draw_style_action( action, [&]()
+            draw_style_status( action, [&]()
             {
                 draw_rect( back_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
             } );
@@ -2165,7 +2142,7 @@ float xui::context::slider( xui::string_id str_id, float & value, float min, flo
                 }
                 }
 
-                draw_style_action( action, [&]()
+                draw_style_status( action, [&]()
                 {
                     draw_rect( cursor_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
                 } );
@@ -2180,13 +2157,13 @@ bool xui::context::process( float value, float min, float max, std::string_view 
     return process( std::format( "_process_{}", _p->_str_id++ ), value, min, max, text );
 }
 
-bool xui::context::process( xui::string_id str_id, float value, float min, float max, std::string_view text )
+bool xui::context::process( xui::element_id eid, float value, float min, float max, std::string_view text )
 {
     draw_style_type( "process", [&]()
     {
-        draw_string_id( str_id, [&]()
+        draw_element_id( eid, [&]()
         {
-            auto back_rect = currrent_rect();
+            auto back_rect = current_rect();
 
             draw_rect( back_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
@@ -2220,7 +2197,7 @@ bool xui::context::process( xui::string_id str_id, float value, float min, float
             {
                 draw_style_element( "text", [&]()
                 {
-                    draw_text( text, current_font(), back_rect, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
+                    draw_text( text, current_font_id(), back_rect, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
                 } );
             }
         } );
@@ -2228,29 +2205,24 @@ bool xui::context::process( xui::string_id str_id, float value, float min, float
     return true;
 }
 
-float xui::context::scrollbar( float & value, float step, float min, float max, xui::direction dir )
+float xui::context::scrollbar( bool & selected, float & value, float step, float min, float max, xui::direction dir )
 {
-    return scrollbar( std::format( "_scrollbar_{}", _p->_str_id++ ), value, step, min, max, dir );
+    return scrollbar( std::format( "_scrollbar_{}", _p->_str_id++ ), selected, value, step, min, max, dir );
 }
 
-float xui::context::scrollbar( xui::string_id str_id, float & value, float step, float min, float max, xui::direction dir )
+float xui::context::scrollbar( xui::element_id eid, bool & selected, float & value, float step, float min, float max, xui::direction dir )
 {
     draw_style_type( "scrollbar", [&]()
     {
-        draw_string_id( str_id, [&]()
+        draw_element_id( eid, [&]()
         {
             auto id = current_window_id();
-            std::string_view action;
-            auto back_rect = currrent_rect();
+            auto back_rect = current_rect();
             xui::vec2 pos = _p->_impl->get_cursor_pos( id );
             float arrow_radius = std::min( back_rect.w, back_rect.h );
+            std::string_view action;
 
-            action = get_action_name();
-
-            draw_style_action( action, [&]()
-            {
-                draw_rect( back_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-            } );
+            draw_rect( back_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
             draw_style_element( "cursor", [&]()
             {
@@ -2267,15 +2239,16 @@ float xui::context::scrollbar( xui::string_id str_id, float & value, float step,
                 case xui::direction::LEFT_RIGHT:
                 case xui::direction::RIGHT_LEFT:
                     detect_rect = { back_rect.x + arrow_radius,  back_rect.y, back_rect.w - arrow_radius * 2, back_rect.h };
-                    push_rect( detect_rect );
-                    action = get_action_name( action_focus_type );
-                    pop_rect();
+                    draw_rect( detect_rect, [&]()
+                    {
+                        action = current_event_status( &selected );
+                    } );
                     break;
                 case xui::direction::TOP_BOTTOM:
                 case xui::direction::BOTTOM_TOP:
                     detect_rect = { back_rect.x,  back_rect.y + arrow_radius, back_rect.w, back_rect.h - arrow_radius * 2 };
                     push_rect( detect_rect );
-                    action = get_action_name( action_focus_type );
+                    action = current_event_status( &selected );
                     pop_rect();
                     break;
                 default:
@@ -2376,7 +2349,7 @@ float xui::context::scrollbar( xui::string_id str_id, float & value, float step,
 
                 draw_style_element( element, [&]()
                 {
-                    draw_style_action( action, [&]()
+                    draw_style_status( action, [&]()
                     {
                         draw_rect( cursor_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
                     } );
@@ -2395,12 +2368,12 @@ float xui::context::scrollbar( xui::string_id str_id, float & value, float step,
                     arrow_rect = { back_rect.x, back_rect.y, arrow_radius, arrow_radius };
                     draw_rect( arrow_rect, [&]()
                     {
-                        action = get_action_name();
+                        action = current_event_status();
 
                         if ( action == "active" )
                             value = std::clamp( value + ( dir == xui::direction::LEFT_RIGHT ? -step : step ), min, max );
 
-                        draw_style_action( action, [&]()
+                        draw_style_status( action, [&]()
                         {
                             draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
@@ -2416,12 +2389,12 @@ float xui::context::scrollbar( xui::string_id str_id, float & value, float step,
                     arrow_rect = { back_rect.x + back_rect.w - arrow_radius, back_rect.y, arrow_radius, arrow_radius };
                     draw_rect( arrow_rect, [&]()
                     {
-                        action = get_action_name();
+                        action = current_event_status();
 
                         if ( action == "active" )
                             value = std::clamp( value + ( dir == xui::direction::RIGHT_LEFT ? -step : step ), min, max );
 
-                        draw_style_action( action, [&]()
+                        draw_style_status( action, [&]()
                         {
                             draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
@@ -2439,12 +2412,12 @@ float xui::context::scrollbar( xui::string_id str_id, float & value, float step,
                     arrow_rect = { back_rect.x, back_rect.y, arrow_radius, arrow_radius };
                     draw_rect( arrow_rect, [&]()
                     {
-                        action = get_action_name();
+                        action = current_event_status();
 
                         if ( action == "active" )
                             value = std::clamp( value + ( dir == xui::direction::TOP_BOTTOM ? -step : step ), min, max );
 
-                        draw_style_action( action, [&]()
+                        draw_style_status( action, [&]()
                         {
                             draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
@@ -2460,12 +2433,12 @@ float xui::context::scrollbar( xui::string_id str_id, float & value, float step,
                     arrow_rect = { back_rect.x, back_rect.y + back_rect.h - arrow_radius, arrow_radius, arrow_radius };
                     draw_rect( arrow_rect, [&]()
                     {
-                        action = get_action_name();
+                        action = current_event_status();
 
                         if ( action == "active" )
                             value = std::clamp( value + ( dir == xui::direction::BOTTOM_TOP ? -step : step ), min, max );
 
-                        draw_style_action( action, [&]()
+                        draw_style_status( action, [&]()
                         {
                             draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
@@ -2484,34 +2457,175 @@ float xui::context::scrollbar( xui::string_id str_id, float & value, float step,
     return value;
 }
 
+bool xui::context::menu( xui::item_model * model )
+{
+    return menu( std::format( "_menu_{}", _p->_str_id++ ), model );
+}
+
+bool xui::context::menu( xui::element_id eid, xui::item_model * model )
+{
+    draw_style_element( "menu", [&]()
+    {
+        draw_element_id( eid, [&]()
+        {
+            auto rect = current_rect();
+
+            int count = 0;
+            float maxw = 0;
+            while ( model->item_exist( count, 0, {} ) )
+            {
+                auto id = model->index( count, 0, {} );
+                auto icon = model->item_data( id, menu_model::ICON ).value<xui::texture_id>();
+                auto name = model->item_data( id, menu_model::NAME ).value<std::string>();
+                auto menu = model->item_data( id, menu_model::IS_MENU ).value<bool>();
+                auto select = model->item_data( id, menu_model::IS_SELECTED ).value<bool>();
+
+
+                float w = _p->_impl->font_size( current_font_id(), model->item_data( id, xui::menu_model::NAME ).value<std::string>() ).w;
+                if ( model->item_data( id, xui::menu_model::ICON ).value<xui::texture_id>() != xui::invalid_id ) w += 30;
+                if ( model->item_data( id, xui::menu_model::IS_MENU ).value<bool>() ) w += 30;
+
+                maxw = std::max( maxw, w );
+
+                count++;
+            }
+
+            if ( count > 0 )
+            {
+                xui::rect list_rect = { rect.x, rect.y, maxw, count * 30.0f };
+
+                draw_style_element( "list", [&]()
+                {
+                    draw_rect( list_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                } );
+
+                for ( int row = 0; row < count; row++ )
+                {
+                    xui::rect sub_item_rect = { list_rect.x, list_rect.y + row * 30, list_rect.w, 30 };
+                    draw_rect( sub_item_rect, [&]()
+                    {
+                        menu_item( row, 0, {}, model );
+                    } );
+                }
+            }
+        } );
+    } );
+
+    return false;
+}
+
+bool xui::context::menu_item( int row, int col, xui::element_id parent, xui::item_model * model )
+{
+    auto id = model->index( row, col, parent );
+    auto icon = model->item_data( id, menu_model::ICON ).value<xui::texture_id>();
+    auto name = model->item_data( id, menu_model::NAME ).value<std::string>();
+    auto menu = model->item_data( id, menu_model::IS_MENU ).value<bool>();
+    auto select = model->item_data( id, menu_model::IS_SELECTED ).value<bool>();
+
+    draw_style_element( "item", [&]()
+    {
+        draw_element_id( id, [&]()
+        {
+            auto rect = current_rect();
+
+            draw_rect( rect, [&]()
+            {
+                std::string_view action = current_event_status( &select );
+                model->item_data( id, menu_model::IS_SELECTED, select );
+
+                draw_style_status( action, [&]()
+                {
+                    draw_rect( rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+
+                    if ( icon != xui::invalid_id )
+                    {
+                        draw_image( icon, { rect.x, rect.y, rect.h, rect.h } );
+                        rect = rect.margins_added( rect.h, 0, 0, 0 );
+                    }
+
+                    if ( name.empty() == false )
+                    {
+                        draw_text( name, current_font_id(), rect, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
+                    }
+
+                    if ( menu )
+                    {
+                        draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                            .moveto( { rect.x + rect.w - rect.h * 0.4f, rect.y + rect.h * 0.6f } )
+                            .lineto( { rect.x + rect.w - rect.h * 0.1f, rect.y + rect.h * 0.5f } )
+                            .lineto( { rect.x + rect.w - rect.h * 0.4f, rect.y + rect.h * 0.4f } );
+                    }
+                } );
+            } );
+        } );
+    } );
+
+    if ( menu && select )
+    {
+        draw_style_element( "list", [&]()
+        {
+            int count = 0;
+            float maxw = 0;
+            while ( model->item_exist( count, 0, id ) )
+            {
+                auto cid = model->index( count, 0, id );
+
+                float w = _p->_impl->font_size( current_font_id(), model->item_data( cid, xui::menu_model::NAME ).value<std::string>() ).w;
+                if ( model->item_data( cid, xui::menu_model::ICON ).value<xui::texture_id>() != xui::invalid_id ) w += 30;
+                if ( model->item_data( cid, xui::menu_model::IS_MENU ).value<bool>() ) w += 30;
+
+                maxw = std::max( maxw, w );
+
+                count++;
+            }
+
+            if ( count > 0 )
+            {
+                auto rect = current_rect();
+
+                xui::rect list_rect = { rect.x + rect.w, rect.y, maxw, count * 30.0f };
+
+                draw_rect( list_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+
+                for ( int row = 0; row < count; row++ )
+                {
+                    xui::rect sub_item_rect = { list_rect.x, list_rect.y + row * 30, list_rect.w, 30 };
+                    draw_rect( sub_item_rect, [&]() { menu_item( row, 0, id, model ); } );
+                }
+            }
+        } );
+    }
+
+    return false;
+}
+
 bool xui::context::menubar( xui::item_model * model )
 {
     return menubar( std::format( "_menubar_{}", _p->_str_id++ ), model );
 }
 
-bool xui::context::menubar( xui::string_id str_id, xui::item_model * model )
+bool xui::context::menubar( xui::element_id eid, xui::item_model * model )
 {
     draw_style_type( "menubar", [&]()
     {
-        draw_string_id( str_id, [&]()
+        draw_element_id( eid, [&]()
         {
-            auto rect = currrent_rect();
+            auto rect = current_rect();
             xui::rect menubar_rect = { rect.x, rect.y - 1, rect.w, 30 };
             draw_rect( menubar_rect, [&]()
             {
                 draw_rect( menubar_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
-                for ( int col = 0; col < INT_MAX; col++ )
+                int row = 0;
+                while ( model->item_exist( row, 0, {} ) )
                 {
-                    if ( model->col_header_data_exist( col ) == false )
-                        break;
+                    auto id = model->index( row, 0, {} );
+                    auto icon = model->item_data( id, menubar_model::ICON ).value<xui::texture_id>();
+                    auto name = model->item_data( id, menubar_model::NAME ).value<std::string>();
+                    auto select = model->item_data( id, menubar_model::IS_SELECTED ).value<bool>();
+                    auto menu_model = model->item_data( id, menubar_model::MENUMODEL ).value<xui::item_model *>();
 
-                    auto id = model->col_header_data( col, menubar_model::ID ).value<std::string>();
-                    auto icon = model->col_header_data( col, menubar_model::ICON ).value<xui::texture_id>();
-                    auto name = model->col_header_data( col, menubar_model::NAME ).value<std::string>();
-                    auto select = model->col_header_data( col, menubar_model::IS_SELECTED ).value<bool>();
-
-                    auto name_size = _p->_impl->font_size( current_font(), name );
+                    auto name_size = _p->_impl->font_size( current_font_id(), name );
                     xui::rect item_rect = { menubar_rect.x, menubar_rect.y, 0, 30 };
                     
                     if ( icon != xui::invalid_id )
@@ -2519,14 +2633,14 @@ bool xui::context::menubar( xui::string_id str_id, xui::item_model * model )
 
                     item_rect.w += name_size.w;
 
-                    draw_string_id( id, [&]()
+                    draw_element_id( id, [&]()
                     {
                         draw_rect( item_rect, [&]()
                         {
-                            std::string_view action = get_action_name( action_menu_type );
-                            select = action == "active";
+                            std::string_view action = current_event_status( &select );
+                            model->item_data( id, menubar_model::IS_SELECTED, select );
 
-                            draw_style_action( action, [&]()
+                            draw_style_status( action, [&]()
                             {
                                 draw_rect( item_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
@@ -2538,72 +2652,23 @@ bool xui::context::menubar( xui::string_id str_id, xui::item_model * model )
                                     x += item_rect.h;
                                 }
 
-                                draw_text( name, current_font(), { x, item_rect.y, name_size.w, item_rect.h }, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
+                                draw_text( name, current_font_id(), { x, item_rect.y, name_size.w, item_rect.h }, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
                             } );
                         } );
                     } );
 
-                    if ( select )
+                    if ( select ) draw_rect( { item_rect.x, item_rect.y + item_rect.h, rect.w - ( item_rect.x - rect.x ), rect.h }, [&]()
                     {
-                        int count = 0;
-                        float maxw = 0;
-                        while ( model->item_exist( count, col, id ) )
-                        {
-                            auto cid = model->index( count, col, id );
-                            float w = _p->_impl->font_size( current_font(), model->item_data( cid, xui::menubar_model::NAME ).value<std::string>() ).w;
-                            if ( model->item_data( cid, xui::menubar_model::ICON ).value<xui::texture_id>() != xui::invalid_id ) w += 30;
-                            if ( model->item_data( cid, xui::menubar_model::IS_MENU ).value<bool>() ) w += 30;
-                            
-                            maxw = std::max( maxw, w );
-
-                            count++;
-                        }
-
-                        if ( count > 0 )
-                        {
-                            xui::rect list_rect = { item_rect.x, item_rect.y + item_rect.h, maxw, count * 30.0f };
-
-                            draw_style_element( "list", [&]()
-                            {
-                                draw_rect( list_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-                            } );
-
-                            for ( int row = 0; row < count; row++ )
-                            {
-                                xui::rect sub_item_rect = { list_rect.x, list_rect.y + row * 30, list_rect.w, 30 };
-                                draw_rect( sub_item_rect, [&]()
-                                {
-                                    draw_menubar_item( row, col, id, model );
-                                } );
-                            }
-                        }
-                    }
+                        menu( menu_model );
+                    } );
 
                     menubar_rect = menubar_rect.margins_added( item_rect.w, 0, 0, 0 );
+
+                    row++;
                 }
             } );
         } );
     } );
-    return false;
-}
-
-bool xui::context::draw_menubar_item( int row, int col, xui::string_id parent, xui::item_model * model )
-{
-    auto id = model->index( row, col, parent );
-    auto icon = model->item_data( id, menubar_model::ICON ).value<xui::texture_id>();
-    auto name = model->item_data( id, menubar_model::NAME ).value<std::string>();
-    auto menu = model->item_data( id, menubar_model::IS_MENU ).value<bool>();
-    auto select = model->item_data( id, menubar_model::IS_SELECTED ).value<bool>();
-
-    draw_style_element( "item", [&]()
-    {
-        draw_string_id( id, [&]()
-        {
-
-        } );
-    } );
-
-    if( menu )
 
     return false;
 }
@@ -2712,149 +2777,4 @@ xui::drawcmd::polygon_element & xui::context::draw_polygon( std::span<xui::vec2>
     _p->_commands.push_back( { current_window_id(), element } );
 
     return std::get<xui::drawcmd::polygon_element>( _p->_commands.back().element );
-}
-
-std::string xui::context::style_name() const
-{
-    std::string result;
-
-    if ( !_p->_strids.empty() )
-    {
-        result.append( _p->_strids.back() );
-        result.append( "#" );
-    }
-
-    result.append( _p->_types.back().type.begin(), _p->_types.back().type.end() );
-
-    for ( const auto & it : _p->_types.back().elements )
-    {
-        result.append( "-" );
-        result.append( it );
-    }
-
-    if ( !_p->_types.back().actions.empty() )
-    {
-        result.append( ":" );
-        result.append( _p->_types.back().actions.back() );
-    }
-
-    return result;
-}
-
-std::string xui::context::focus_name() const
-{
-    std::string result;
-
-    if ( !_p->_strids.empty() )
-    {
-        result.append( _p->_strids.back() );
-        result.append( "#" );
-    }
-
-    result.append( _p->_types.back().type.begin(), _p->_types.back().type.end() );
-
-    for ( const auto & it : _p->_types.back().elements )
-    {
-        result.append( "-" );
-        result.append( it );
-    }
-
-    return result;
-}
-
-void xui::context::push_focus( xui::event event, int type )
-{
-    focus_type t;
-    t.id = current_window_id();
-    t.type = type;
-    t.name = focus_name();
-    t.rect = currrent_rect();
-    t.event = event;
-
-    if ( !_p->_focus.empty() && _p->_focus.back().type != type )
-    {
-        _p->_focus.clear();
-    }
-    else if ( !_p->_focus.empty() && _p->_focus.back().type == type && type == action_menu_type )
-    {
-        while ( !_p->_focus.empty() && _p->_focus.back().name != t.name )
-            _p->_focus.pop_back();
-    }
-
-    _p->_focus.push_back( t );
-}
-
-void xui::context::pop_focus()
-{
-    if ( !_p->_focus.empty() )
-        _p->_focus.pop_back();
-}
-
-bool xui::context::exist_menu() const
-{
-    if ( _p->_focus.empty() )
-        return false;
-
-    auto name = focus_name();
-    return std::find_if( _p->_focus.begin(), _p->_focus.end(), [&]( const auto & val ) { return val.name.find( name ) != std::string::npos; } ) != _p->_focus.end();
-}
-
-bool xui::context::inherit_focus() const
-{
-    if ( _p->_focus.empty() )
-        return true;
-
-    if ( _p->_focus.back().type != action_focus_type )
-        return true;
-
-    return focus_name().find( _p->_focus.back().name ) != std::string::npos;
-}
-
-bool xui::context::current_focus() const
-{
-    if ( _p->_focus.empty() )
-        return false;
-
-    return _p->_focus.back().name == focus_name();
-}
-
-std::string_view xui::context::get_action_name( int type )
-{
-    /*
-    * hover
-    * active
-    * disable
-    */
-    auto id = current_window_id();
-    auto rect = currrent_rect();
-    auto pos = _p->_impl->get_cursor_pos( id );
-
-    if ( current_disable() )
-    {
-        return "disable";
-    }
-    else if ( ( type == action_menu_type ) && exist_menu() )
-    {
-        return "active";
-    }
-    else if ( ( type == action_focus_type ) && current_focus() )
-    {
-        return "active";
-    }
-    else if( inherit_focus() )
-    {
-        if ( _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) && rect.contains( pos ) )
-        {
-            if( type != action_nil_type )
-                push_focus( xui::event::KEY_MOUSE_LEFT, type );
-            
-            return "active";
-        }
-        else if ( _p->_impl->get_event( id, xui::event::MOUSE_ACTIVE ) && rect.contains( pos ) )
-        {
-            return "hover";
-        }
-    }
-
-    return "";
 }

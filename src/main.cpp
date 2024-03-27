@@ -1,10 +1,13 @@
 #include <iostream>
 #include "gdi_implement.h"
 
-static float slider_value = 0;
 static bool radio_value = false;
+static float slider_value = 0;
 static float vscollbar_value = 0;
 static float hscollbar_value = 0;
+static bool slider_select = false;
+static bool vscrollbar_select = false;
+static bool hscrollbar_select = false;
 
 int main()
 {
@@ -27,7 +30,7 @@ int main()
 	{
 		ctx.begin();
 		{
-			ctx.push_font( font ); ctx.push_style( &style ); ctx.push_window_id( window );
+			ctx.push_font_id( font ); ctx.push_style( &style ); ctx.push_window_id( window );
 			{
 				ctx.push_rect( imp.get_window_rect( window ) );
 				{
@@ -37,12 +40,20 @@ int main()
 						{
 							xui::menubar_model m;
 
-							m.beg_menu( "menu1" );
-							m.add_item( "item1 item1" );
-							m.end_menu();
-							m.beg_menu( "menu2" );
-							m.add_item( "item2 item2" );
-							m.end_menu();
+							if ( auto menu1 = m.add_menu( "menu1" ) )
+							{
+								menu1->add_item( "item1-item1" );
+								menu1->beg_menu("menu1-menu11" );
+								{
+									menu1->add_item( "menu1-menu11-item1" );
+								}
+								menu1->end_menu();
+							}
+
+							if( auto menu2 = m.add_menu( "menu2" ) )
+							{
+								menu2->add_item( "item2-item2" );
+							}
 
 							return m;
 						}( );
@@ -64,7 +75,7 @@ int main()
 						ctx.pop_rect();
 
 						ctx.push_rect( { 100, 200, 100, 100 } );
-						ctx.slider( slider_value, 0, 1 );
+						ctx.slider( slider_select, slider_value, 0, 1 );
 						ctx.pop_rect();
 
 						ctx.push_rect( { 100, 300, 100, 100 } );
@@ -79,14 +90,14 @@ int main()
 						ctx.check( radio_value );
 						ctx.pop_rect();
 
-						auto rect = ctx.currrent_rect();
+						auto rect = ctx.current_rect();
 
 						ctx.push_rect( { rect.x + rect.w - 20, rect.y, 20, rect.h - 20 } );
-						ctx.scrollbar( vscollbar_value, 0.1f, 0, 1, xui::direction::TOP_BOTTOM );
+						ctx.scrollbar( vscrollbar_select, vscollbar_value, 0.1f, 0, 1, xui::direction::TOP_BOTTOM );
 						ctx.pop_rect();
 
 						ctx.push_rect( { rect.x, rect.y + rect.h - 20, rect.w - 20, 20 } );
-						ctx.scrollbar( hscollbar_value, 0.1f, 0, 1, xui::direction::LEFT_RIGHT );
+						ctx.scrollbar( hscrollbar_select, hscollbar_value, 0.1f, 0, 1, xui::direction::LEFT_RIGHT );
 						ctx.pop_rect();
 
 
@@ -95,7 +106,7 @@ int main()
 				}
 				ctx.pop_rect();
 			}
-			ctx.pop_window_id(); ctx.pop_style(); ctx.pop_font();
+			ctx.pop_window_id(); ctx.pop_style(); ctx.pop_font_id();
 		}
 		return ctx.end();
 	} );
