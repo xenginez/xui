@@ -271,7 +271,7 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
     {
         GetMessageA( &msg, nullptr, 0, 0 );
 
-        xui::window_id id = xui::invalid_id;
+        xui::window_id id = xui::invalid_window_id;
         auto it = std::find_if( _p->_windows.begin(), _p->_windows.end(), [&](const auto & val )
         {
             return val.hwnd == msg.hwnd;
@@ -331,13 +331,13 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         {
             ReleaseCapture();
 
-            set_event( id, xui::event::KEY_MOUSE_LEFT, 1, action::RELEASE );
+            set_event( id, xui::event::KEY_MOUSE_LEFT, 0 );
 
             std::cout << "WM_LBUTTONUP" << std::endl;
         }
         else if ( msg.message == WM_RBUTTONUP )
         {
-            set_event( id, xui::event::KEY_MOUSE_RIGHT, 1, action::RELEASE );
+            set_event( id, xui::event::KEY_MOUSE_RIGHT, 0 );
 
             std::cout << "WM_RBUTTONUP" << std::endl;
         }
@@ -345,21 +345,22 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         {
             TRACKMOUSEEVENT tme;
             tme.cbSize = sizeof( tme );
-            tme.dwFlags = TME_LEAVE;
-            tme.dwHoverTime = HOVER_DEFAULT;
+            tme.dwFlags = TME_HOVER | TME_LEAVE;
+            tme.dwHoverTime = 50;
             tme.hwndTrack = msg.hwnd;
             TrackMouseEvent( &tme );
 
             set_event( id, xui::event::WINDOW_ACTIVE, 1 );
+        }
+        else if ( msg.message == WM_MOUSEHOVER )
+        {
+            set_event( id, xui::event::WINDOW_ACTIVE, 1 );
 
-            auto x = (float)(short)LOWORD( msg.lParam );
-            auto y = (float)(short)HIWORD( msg.lParam );
-
-            set_cursor( id, { _p->_windows[id].rect.x + x, _p->_windows[id].rect.y + y } );
+            std::cout << "WM_MOUSEHOVER" << std::endl;
         }
         else if ( msg.message == WM_MOUSELEAVE )
         {
-            set_event( id, xui::event::WINDOW_ACTIVE, 1, action::RELEASE );
+            set_event( id, xui::event::WINDOW_ACTIVE, 0 );
 
             std::cout << "WM_MOUSELEAVE" << std::endl;
         }
@@ -369,18 +370,30 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
 
             std::cout << "WM_SETFOCUS" << std::endl;
         }
+        else if ( msg.message == WM_KILLFOCUS )
+        {
+            set_event( id, xui::event::WINDOW_ACTIVE, 0 );
+
+            std::cout << "WM_KILLFOCUS" << std::endl;
+        }
         else if ( msg.message == WM_ACTIVATE )
         {
             set_event( id, xui::event::WINDOW_ACTIVE, 1 );
 
             std::cout << "WM_ACTIVATE" << std::endl;
         }
-        else if ( msg.message == WA_ACTIVE )
+        else if ( msg.message == WM_MOUSEACTIVATE )
         {
             set_event( id, xui::event::WINDOW_ACTIVE, 1 );
 
-            std::cout << "WA_ACTIVE" << std::endl;
+            std::cout << "WM_MOUSEACTIVATE" << std::endl;
         }
+        else if ( msg.message == WM_ACTIVATEAPP )
+        {
+            set_event( id, xui::event::WINDOW_ACTIVE, 1 );
+
+            std::cout << "WM_ACTIVATEAPP" << std::endl;
+            }
         else if ( msg.message == WM_TOUCH )
         {
             _p->_windows[id].events._touchs.clear();
@@ -421,9 +434,7 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         {
             auto key = key_event( msg.wParam );
             if ( key != xui::event::EVENT_MAX_COUNT )
-            {
                 set_event( id, key, 1 );
-            }
 
             std::cout << "WM_KEYDOWN" << std::endl;
         }
@@ -431,9 +442,7 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         {
             auto key = key_event( msg.wParam );
             if ( key != xui::event::EVENT_MAX_COUNT )
-            {
-                set_event( id, key, 1, action::RELEASE );
-            }
+                set_event( id, key, 0 );
 
             std::cout << "WM_KEYUP" << std::endl;
         }
@@ -446,6 +455,13 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         else
         {
             std::cout << "0x" << std::hex << std::setfill( '0' ) << std::setw( 4 ) << msg.message << std::endl;
+        }
+
+        if ( id != xui::invalid_window_id )
+        {
+            POINT pt;
+            GetCursorPos( &pt );
+            set_cursor( id, { (float)pt.x, (float)pt.y } );
         }
 
         render( paint() );
@@ -523,7 +539,7 @@ xui::window_id gdi_implement::create_window( std::string_view title, xui::textur
 xui::window_id gdi_implement::get_window_parent( xui::window_id id ) const
 {
     if ( id >= _p->_windows.size() )
-        return xui::invalid_id;
+        return xui::invalid_window_id;
 
     auto p = GetParent( _p->_windows[id].hwnd );
     if ( p != nullptr )
@@ -538,7 +554,7 @@ xui::window_id gdi_implement::get_window_parent( xui::window_id id ) const
         }
     }
 
-    return xui::invalid_id;
+    return xui::invalid_window_id;
 }
 
 void gdi_implement::set_window_parent( xui::window_id id, xui::window_id parent )
@@ -546,7 +562,7 @@ void gdi_implement::set_window_parent( xui::window_id id, xui::window_id parent 
     if ( id >= _p->_windows.size() )
         return;
 
-    SetParent( _p->_windows[id].hwnd, parent == xui::invalid_id ? nullptr : _p->_windows[parent].hwnd );
+    SetParent( _p->_windows[id].hwnd, parent == xui::invalid_window_id ? nullptr : _p->_windows[parent].hwnd );
 }
 
 xui::window_status gdi_implement::get_window_status( xui::window_id id ) const
@@ -685,7 +701,7 @@ bool gdi_implement::load_font_file( std::string_view filename )
 
 xui::font_id gdi_implement::create_font( std::string_view family, int size, xui::font_flag flag )
 {
-    xui::font_id id = xui::invalid_id;
+    xui::font_id id = xui::invalid_font_id;
 
     for ( size_t i = 0; i < _p->_fonts.size(); i++ )
     {
@@ -695,7 +711,7 @@ xui::font_id gdi_implement::create_font( std::string_view family, int size, xui:
             break;
         }
     }
-    if ( id == xui::invalid_id )
+    if ( id == xui::invalid_font_id )
     {
         _p->_fonts.push_back( {} );
         id = _p->_fonts.size() - 1;
@@ -733,7 +749,7 @@ xui::font_id gdi_implement::create_font( std::string_view family, int size, xui:
         }
     }
 
-    return xui::invalid_id;
+    return xui::invalid_font_id;
 }
 
 xui::size gdi_implement::font_size( xui::font_id id, std::string_view text ) const
@@ -771,7 +787,7 @@ xui::texture_id gdi_implement::create_texture( std::string_view filename )
     if ( it != _p->_textures.end() )
         return std::distance( _p->_textures.begin(), it );
 
-    xui::texture_id id = xui::invalid_id;
+    xui::texture_id id = xui::invalid_texture_id;
 
     for ( size_t i = 0; i < _p->_textures.size(); i++ )
     {
@@ -781,7 +797,7 @@ xui::texture_id gdi_implement::create_texture( std::string_view filename )
             break;
         }
     }
-    if ( id == xui::invalid_id )
+    if ( id == xui::invalid_texture_id )
     {
         _p->_textures.push_back( {} );
         id = _p->_textures.size() - 1;
@@ -942,7 +958,7 @@ void gdi_implement::present()
 void gdi_implement::render( std::span<xui::drawcmd> cmds )
 {
     HGDIOBJ old_obj = nullptr;
-    xui::window_id id = xui::invalid_id;
+    xui::window_id id = xui::invalid_window_id;
 
     for ( const auto & cmd : cmds )
     {
@@ -1329,13 +1345,13 @@ void gdi_implement::set_touchs( xui::window_id id, std::span<xui::vec2> touchs )
     _p->_windows[id].events._touchs.assign( touchs.begin(), touchs.end() );
 }
 
-void gdi_implement::set_event( xui::window_id id, xui::event key, int val, action act )
+void gdi_implement::set_event( xui::window_id id, xui::event key, int val )
 {
-    if ( id != xui::invalid_id )
+    if ( id != xui::invalid_window_id )
     {
-        if ( key >= xui::event::MOUSE_EVENT_BEG && key <= xui::event::MOUSE_EVENT_END )
+        if ( key >= xui::event::WINDOW_EVENT_BEG && key <= xui::event::WINDOW_EVENT_END )
         {
-            if ( key == xui::event::WINDOW_ACTIVE && act == action::RELEASE )
+            if ( key == xui::event::WINDOW_ACTIVE && val == 0 )
             {
                 _p->_windows[id].events._cursorpos = {};
                 _p->_windows[id].events._cursorold = {};
@@ -1344,14 +1360,15 @@ void gdi_implement::set_event( xui::window_id id, xui::event key, int val, actio
                 std::fill( _p->_windows[id].events._events.begin() + (size_t)xui::event::MOUSE_EVENT_BEG, _p->_windows[id].events._events.begin() + (size_t)xui::event::MOUSE_EVENT_END + 1, 0 );
             }
 
-            if ( act == action::RELEASE )
-                _p->_windows[id].events._events[(size_t)key] = 0;
-            else
-                _p->_windows[id].events._events[(size_t)key] = 1;
+            _p->_windows[id].events._events[(size_t)key] = val;
+        }
+        else if ( key >= xui::event::MOUSE_EVENT_BEG && key <= xui::event::MOUSE_EVENT_END )
+        {
+            _p->_windows[id].events._events[(size_t)key] = val;
         }
         else if ( key >= xui::event::KEY_EVENT_BEG && key <= xui::event::KEY_EVENT_END )
         {
-            _p->_windows[id].events._events[(size_t)key] = 1;
+            _p->_windows[id].events._events[(size_t)key] = val;
         }
     }
 }

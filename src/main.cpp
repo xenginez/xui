@@ -32,7 +32,7 @@ int main()
 		{
 			ctx.push_font_id( font ); ctx.push_style( &style ); ctx.push_window_id( window );
 			{
-				ctx.push_rect( imp.get_window_rect( window ) );
+				ctx.push_window_rect( imp.get_window_rect( window ) );
 				{
 					ctx.begin_window( "超级UI", icon, xui::window_flag::WINDOW_NO_MINIMIZEBOX );
 					{
@@ -59,52 +59,52 @@ int main()
 						}( );
 						ctx.menubar( &menubar_m );
 
-						ctx.push_rect( { 100, 100, 100, 100 } );
+						ctx.push_window_rect( { 100, 100, 100, 100 } );
 						ctx.label( "奋斗精神鼓励" );
-						ctx.pop_rect();
+						ctx.pop_window_rect();
 
-						ctx.push_rect( { 200, 200, 100, 100 } );
+						ctx.push_window_rect( { 200, 200, 100, 100 } );
 						ctx.image( icon );
-						ctx.pop_rect();
+						ctx.pop_window_rect();
 
-						ctx.push_rect( { 300, 200, 50, 70 } );
+						ctx.push_window_rect( { 300, 200, 50, 70 } );
 						if ( ctx.button( "购房价款" ) )
 						{
 							std::cout << "购房价款 clicked" << std::endl;
 						}
-						ctx.pop_rect();
+						ctx.pop_window_rect();
 
-						ctx.push_rect( { 100, 200, 100, 100 } );
+						ctx.push_window_rect( { 100, 200, 100, 100 } );
 						ctx.slider( slider_select, slider_value, 0, 1 );
-						ctx.pop_rect();
+						ctx.pop_window_rect();
 
-						ctx.push_rect( { 100, 300, 100, 100 } );
+						ctx.push_window_rect( { 100, 300, 100, 100 } );
 						ctx.process( slider_value, 0, 1, std::to_string( (int)( slider_value * 100 ) ) + "%" );
-						ctx.pop_rect();
+						ctx.pop_window_rect();
 
-						ctx.push_rect( { 100, 420, 20, 20 } );
+						ctx.push_window_rect( { 100, 420, 20, 20 } );
 						ctx.radio( radio_value );
-						ctx.pop_rect();
+						ctx.pop_window_rect();
 
-						ctx.push_rect( { 100, 440, 20, 20 } );
+						ctx.push_window_rect( { 100, 440, 20, 20 } );
 						ctx.check( radio_value );
-						ctx.pop_rect();
+						ctx.pop_window_rect();
 
-						auto rect = ctx.current_rect();
+						auto rect = ctx.current_window_rect();
 
-						ctx.push_rect( { rect.x + rect.w - 20, rect.y, 20, rect.h - 20 } );
+						ctx.push_window_rect( { rect.x + rect.w - 20, rect.y, 20, rect.h - 20 } );
 						ctx.scrollbar( vscrollbar_select, vscollbar_value, 0.1f, 0, 1, xui::direction::TOP_BOTTOM );
-						ctx.pop_rect();
+						ctx.pop_window_rect();
 
-						ctx.push_rect( { rect.x, rect.y + rect.h - 20, rect.w - 20, 20 } );
+						ctx.push_window_rect( { rect.x, rect.y + rect.h - 20, rect.w - 20, 20 } );
 						ctx.scrollbar( hscrollbar_select, hscollbar_value, 0.1f, 0, 1, xui::direction::LEFT_RIGHT );
-						ctx.pop_rect();
+						ctx.pop_window_rect();
 
 
 					}
 					ctx.end_window();
 				}
-				ctx.pop_rect();
+				ctx.pop_window_rect();
 			}
 			ctx.pop_window_id(); ctx.pop_style(); ctx.pop_font_id();
 		}

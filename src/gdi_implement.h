@@ -8,20 +8,14 @@ namespace Gdiplus
 	class Brush;
 }
 
-enum action
-{
-	PRESS = 1,
-	RELEASE = -1,
-};
-
 namespace system_resource
 {
-	static constexpr xui::element_id FONT_DEFAULT = "font://default";
+	static constexpr xui::control_id FONT_DEFAULT = "font://default";
 
-	static constexpr xui::element_id ICON_APPLICATION = "icon://application";
-	static constexpr xui::element_id ICON_ERROR = "icon://error";
-	static constexpr xui::element_id ICON_WARNING = "icon://warning";
-	static constexpr xui::element_id ICON_INFORMATION = "icon://information";
+	static constexpr xui::control_id ICON_APPLICATION = "icon://application";
+	static constexpr xui::control_id ICON_ERROR = "icon://error";
+	static constexpr xui::control_id ICON_WARNING = "icon://warning";
+	static constexpr xui::control_id ICON_INFORMATION = "icon://information";
 }
 
 class gdi_implement : public xui::implement
@@ -39,7 +33,7 @@ public:
 	void release();
 
 public:
-	xui::window_id create_window( std::string_view title, xui::texture_id icon, const xui::rect & rect, xui::window_id parent = xui::invalid_id ) override;
+	xui::window_id create_window( std::string_view title, xui::texture_id icon, const xui::rect & rect, xui::window_id parent = xui::invalid_window_id ) override;
 	xui::window_id get_window_parent( xui::window_id id ) const override;
 	void set_window_parent( xui::window_id id, xui::window_id parent ) override;
 	xui::window_status get_window_status( xui::window_id id ) const override;
@@ -84,7 +78,7 @@ private:
 	void set_wheel( xui::window_id id, const xui::vec2 & dt );
 	void set_cursor( xui::window_id id, const xui::vec2 & pos );
 	void set_touchs( xui::window_id id, std::span<xui::vec2> touchs );
-	void set_event( xui::window_id id, xui::event key, int val, action act = action::PRESS );
+	void set_event( xui::window_id id, xui::event key, int val );
 
 private:
 	private_p * _p;

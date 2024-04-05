@@ -12,19 +12,23 @@
 
 #ifndef XUI_FONT_ID
 #define XUI_FONT_ID std::size_t
+#define XUI_INVALID_FONT_ID std::numeric_limits<std::size_t>::max()
 #endif // !XUI_FONT_ID
 
 #ifndef XUI_WINDOW_ID
 #define XUI_WINDOW_ID std::size_t
+#define XUI_INVALID_WINDOW_ID std::numeric_limits<std::size_t>::max()
 #endif // !XUI_WINDOW_ID
 
 #ifndef XUI_TEXTURE_ID
 #define XUI_TEXTURE_ID std::size_t
+#define XUI_INVALID_TEXTURE_ID std::numeric_limits<std::size_t>::max()
 #endif // !XUI_TEXTURE_ID
 
-#ifndef XUI_ELEMENT_ID
-#define XUI_ELEMENT_ID std::string_view
-#endif // !XUI_ELEMENT_ID
+#ifndef XUI_CONTROL_ID
+#define XUI_CONTROL_ID std::string_view
+#define XUI_INVALID_CONTROL_ID {}
+#endif // !XUI_CONTROL_ID
 
 
 namespace xui
@@ -214,8 +218,10 @@ namespace xui
 	enum event_status
 	{
 		NORMAL,		// normal
+		DRAG,		// drag
 		HOVER,		// hover
 		ACTIVE,		// active
+		DISABLED,	// disabled
 		SELECTED,	// selected
 	};
 	enum window_status
@@ -230,10 +236,12 @@ namespace xui
 	using font_id = XUI_FONT_ID;
 	using window_id = XUI_WINDOW_ID;
 	using texture_id = XUI_TEXTURE_ID;
-	using element_id = XUI_ELEMENT_ID;
+	using control_id = XUI_CONTROL_ID;
+	static constexpr const font_id invalid_font_id = XUI_INVALID_FONT_ID;
+	static constexpr const window_id invalid_window_id = XUI_INVALID_WINDOW_ID;
+	static constexpr const texture_id invalid_texture_id = XUI_INVALID_TEXTURE_ID;
+	static constexpr const control_id invalid_control_id = XUI_INVALID_CONTROL_ID;
 	
-	static constexpr const std::size_t invalid_id = std::numeric_limits<std::size_t>::max();
-
 	class url : public std::string
 	{
 	public:
@@ -715,7 +723,7 @@ namespace xui
 		void set_scale( float factor );
 		
 	public:
-		std::string_view current_event_status( bool * selected = nullptr );
+		xui::event_status current_event_status( bool * selected = nullptr );
 
 	public:
 		void push_style( xui::style * style );
@@ -735,9 +743,9 @@ namespace xui
 		void pop_style_element();
 		std::string_view current_style_element() const;
 
-		void push_style_status( std::string_view name );
+		void push_style_status( xui::event_status status );
 		void pop_style_status();
-		std::string_view current_style_status() const;
+		xui::event_status current_style_status() const;
 
 	public:
 		template<typename F> void draw_style( xui::style * style, F && f )
@@ -758,11 +766,11 @@ namespace xui
 			func();
 			if ( !element.empty() ) pop_style_element();
 		}
-		template<typename F> void draw_style_status( std::string_view status, F && func )
+		template<typename F> void draw_style_status( xui::event_status status, F && func )
 		{
-			if ( !status.empty() ) push_style_status( status );
+			push_style_status( status );
 			func();
-			if ( !status.empty() ) pop_style_status();
+			pop_style_status();
 		}
 
 	public:
@@ -770,10 +778,10 @@ namespace xui
 		void pop_disable();
 		bool current_disable() const;
 
-		void push_rect( const xui::rect & rect );
-		void pop_rect();
-		xui::rect current_rect() const;
-		void margins_current_rect( float left, float right, float top, float bottom );
+		void push_window_rect( const xui::rect & rect );
+		void pop_window_rect();
+		xui::rect current_window_rect() const;
+		void margins_current_window_rect( float left, float right, float top, float bottom );
 
 		void push_font_id( xui::font_id font );
 		void pop_font_id();
@@ -787,9 +795,9 @@ namespace xui
 		void pop_texture_id();
 		xui::texture_id current_texture_id() const;
 
-		void push_element_id( xui::element_id id );
-		void pop_element_id();
-		xui::element_id current_element_id() const;
+		void push_control_id( xui::control_id id );
+		void pop_control_id();
+		xui::control_id current_control_id() const;
 
 	public:
 		template<typename F> void draw_disable( bool val, F && f )
@@ -798,11 +806,11 @@ namespace xui
 			f();
 			pop_disable();
 		}
-		template<typename F> void draw_rect( const xui::rect & rect, F && f )
+		template<typename F> void draw_window_rect( const xui::rect & rect, F && f )
 		{
-			push_rect( rect );
+			push_window_rect( rect );
 			f();
-			pop_rect();
+			pop_window_rect();
 		}
 		template<typename F> void draw_font_id( xui::font_id id, F && func )
 		{
@@ -822,11 +830,11 @@ namespace xui
 			func();
 			pop_texture_id();
 		}
-		template<typename F> void draw_element_id( xui::element_id eid, F && f )
+		template<typename F> void draw_element_id( xui::control_id eid, F && f )
 		{
-			push_element_id( eid );
+			push_control_id( eid );
 			f();
-			pop_element_id();
+			pop_control_id();
 		}
 
 	public:
@@ -835,33 +843,33 @@ namespace xui
 
 	public:
 		bool begin_window( std::string_view title, xui::texture_id icon_id, int flags = xui::window_flag::WINDOW_NONE );
-		bool begin_window( xui::element_id eid, std::string_view title, xui::texture_id icon_id, int flags = xui::window_flag::WINDOW_NONE );
+		bool begin_window( xui::control_id eid, std::string_view title, xui::texture_id icon_id, int flags = xui::window_flag::WINDOW_NONE );
 		void end_window();
 
 	public:
 		bool image( xui::texture_id id );
-		bool image( xui::element_id eid, xui::texture_id id );
+		bool image( xui::control_id eid, xui::texture_id id );
 		bool label( std::string_view text );
-		bool label( xui::element_id eid, std::string_view text );
+		bool label( xui::control_id eid, std::string_view text );
 		bool radio( bool & checked );
-		bool radio( xui::element_id eid, bool & checked );
+		bool radio( xui::control_id eid, bool & checked );
 		bool check( bool & checked );
-		bool check( xui::element_id eid, bool & checked );
+		bool check( xui::control_id eid, bool & checked );
 		bool button( std::string_view text );
-		bool button( xui::element_id eid, std::string_view text );
+		bool button( xui::control_id eid, std::string_view text );
 		float slider( bool & selected, float & value, float min, float max );
-		float slider( xui::element_id eid, bool & selected, float & value, float min, float max );
+		float slider( xui::control_id eid, bool & selected, float & value, float min, float max );
 		bool process( float value, float min, float max, std::string_view text = "" );
-		bool process( xui::element_id eid, float value, float min, float max, std::string_view text = "" );
+		bool process( xui::control_id eid, float value, float min, float max, std::string_view text = "" );
 		float scrollbar( bool & selected, float & value, float step, float min, float max, xui::direction dir = xui::direction::TOP_BOTTOM );
-		float scrollbar( xui::element_id eid, bool & selected, float & value, float step, float min, float max, xui::direction dir = xui::direction::TOP_BOTTOM );
+		float scrollbar( xui::control_id eid, bool & selected, float & value, float step, float min, float max, xui::direction dir = xui::direction::TOP_BOTTOM );
 
 	public:
 		bool menu( xui::item_model * model );
-		bool menu( xui::element_id eid, xui::item_model * model );
-		bool menu_item( int row, int col, xui::element_id parent, xui::item_model * model );
+		bool menu( xui::control_id eid, xui::item_model * model );
+		bool menu_item( int row, int col, xui::control_id parent, xui::item_model * model );
 		bool menubar( xui::item_model * model );
-		bool menubar( xui::element_id eid, xui::item_model * model );
+		bool menubar( xui::control_id eid, xui::item_model * model );
 
 	public:
 		bool begin_combobox();
@@ -917,7 +925,7 @@ namespace xui
 		virtual ~implement() = default;
 
 	public:
-		virtual xui::window_id create_window( std::string_view title, xui::texture_id icon, const xui::rect & rect, xui::window_id parent = xui::invalid_id ) = 0;
+		virtual xui::window_id create_window( std::string_view title, xui::texture_id icon, const xui::rect & rect, xui::window_id parent = xui::invalid_window_id ) = 0;
 		virtual xui::window_id get_window_parent( xui::window_id id ) const = 0;
 		virtual void set_window_parent( xui::window_id id, xui::window_id parent ) = 0;
 		virtual xui::window_status get_window_status( xui::window_id id ) const = 0;
@@ -971,15 +979,15 @@ namespace xui
 		virtual ~item_model() = default;
 
 	public:
-		virtual xui::element_id parent( xui::element_id id ) const { return {}; }
-		virtual bool item_exist( int row, int col, xui::element_id parent ) const { return false; }
-		virtual xui::element_id index( int row, int col, xui::element_id parent ) const { return {}; }
+		virtual xui::control_id parent( xui::control_id id ) const { return {}; }
+		virtual bool item_exist( int row, int col, xui::control_id parent ) const { return false; }
+		virtual xui::control_id index( int row, int col, xui::control_id parent ) const { return {}; }
 
 	public:
-		virtual int row_count( xui::element_id parent ) const = 0;
-		virtual int col_count( xui::element_id parent ) const = 0;
-		virtual value_t item_data( xui::element_id id, int role ) = 0;
-		virtual void item_data( xui::element_id id, int role, const value_t & val ) = 0;
+		virtual int row_count( xui::control_id parent ) const = 0;
+		virtual int col_count( xui::control_id parent ) const = 0;
+		virtual value_t item_data( xui::control_id id, int role ) = 0;
+		virtual void item_data( xui::control_id id, int role, const value_t & val ) = 0;
 
 	public:
 		virtual bool row_header_data_exist( int row ) const { return false; }
@@ -990,7 +998,7 @@ namespace xui
 		virtual void col_header_data( int col, int role, const value_t & val ) {}
 
 	public:
-		virtual bool move_item( xui::element_id src, xui::element_id dst, int child ) { return false; }
+		virtual bool move_item( xui::control_id src, xui::control_id dst, int child ) { return false; }
 	};
 
 	class menu_model : public item_model
@@ -1010,7 +1018,7 @@ namespace xui
 		{
 			bool menu = false;
 			bool selected = false;
-			xui::texture_id icon = xui::invalid_id;
+			xui::texture_id icon = xui::invalid_texture_id;
 			std::string name = {};
 			std::string shortcuts = {};
 			std::vector<item> childrens = {};
@@ -1026,7 +1034,7 @@ namespace xui
 		}
 
 	public:
-		void beg_menu( std::string_view name, xui::texture_id icon = xui::invalid_id, std::string_view shortcuts = "" )
+		void beg_menu( std::string_view name, xui::texture_id icon = xui::invalid_texture_id, std::string_view shortcuts = "" )
 		{
 			auto pid = stack.back()->id;
 			stack.back()->childrens.push_back( {} );
@@ -1039,7 +1047,7 @@ namespace xui
 			stack.back()->parent = pid;
 			stack.back()->shortcuts = shortcuts;
 		}
-		void add_item( std::string_view name, xui::texture_id icon = xui::invalid_id, std::string_view shortcuts = "" )
+		void add_item( std::string_view name, xui::texture_id icon = xui::invalid_texture_id, std::string_view shortcuts = "" )
 		{
 			item it;
 
@@ -1062,21 +1070,21 @@ namespace xui
 		}
 
 	public:
-		xui::element_id parent( xui::element_id id ) const override
+		xui::control_id parent( xui::control_id id ) const override
 		{
 			if ( auto it = find( id ) )
 				return it->parent;
 
 			return {};
 		}
-		bool item_exist( int row, int col, xui::element_id parent ) const override
+		bool item_exist( int row, int col, xui::control_id parent ) const override
 		{
 			if ( auto it = find( parent ) )
 				return ( row < it->childrens.size() );
 
 			return false;
 		}
-		xui::element_id index( int row, int col, xui::element_id parent ) const override
+		xui::control_id index( int row, int col, xui::control_id parent ) const override
 		{
 			if ( auto it = find( parent ) )
 			{
@@ -1088,7 +1096,7 @@ namespace xui
 		}
 
 	public:
-		int row_count( xui::element_id parent ) const override
+		int row_count( xui::control_id parent ) const override
 		{
 			if ( auto it = find( parent ) )
 			{
@@ -1096,11 +1104,11 @@ namespace xui
 			}
 			return 0;
 		}
-		int col_count( xui::element_id parent ) const override
+		int col_count( xui::control_id parent ) const override
 		{
 			return 1;
 		}
-		value_t item_data( xui::element_id id, int role ) override
+		value_t item_data( xui::control_id id, int role ) override
 		{
 			if ( auto it = find( id ) )
 			{
@@ -1122,7 +1130,7 @@ namespace xui
 			}
 			return {};
 		}
-		void item_data( xui::element_id id, int role, const value_t & val ) override
+		void item_data( xui::control_id id, int role, const value_t & val ) override
 		{
 			if ( role == xui::menu_model::IS_SELECTED )
 			{
@@ -1134,7 +1142,7 @@ namespace xui
 		}
 
 	private:
-		item * find( xui::element_id id ) const
+		item * find( xui::control_id id ) const
 		{
 			if ( id.empty() )
 				return &root;
@@ -1201,7 +1209,7 @@ namespace xui
 		struct item
 		{
 			bool selected = false;
-			xui::texture_id icon = xui::invalid_id;
+			xui::texture_id icon = xui::invalid_texture_id;
 			std::string name = {};
 			std::string shortcuts = {};
 			menu_model * menu = nullptr;
@@ -1209,7 +1217,7 @@ namespace xui
 		};
 
 	public:
-		menu_model * add_menu( std::string_view name, xui::texture_id icon = xui::invalid_id, std::string_view shortcuts = "" )
+		menu_model * add_menu( std::string_view name, xui::texture_id icon = xui::invalid_texture_id, std::string_view shortcuts = "" )
 		{
 			items.push_back( {} );
 
@@ -1223,11 +1231,11 @@ namespace xui
 		}
 
 	public:
-		bool item_exist( int row, int col, xui::element_id parent ) const override
+		bool item_exist( int row, int col, xui::control_id parent ) const override
 		{
 			return row < items.size();
 		}
-		xui::element_id index( int row, int col, xui::element_id parent ) const override
+		xui::control_id index( int row, int col, xui::control_id parent ) const override
 		{
 			if ( row < items.size() )
 				return items[row].id;
@@ -1236,15 +1244,15 @@ namespace xui
 		}
 
 	public:
-		int row_count( xui::element_id parent ) const override
+		int row_count( xui::control_id parent ) const override
 		{
 			return 1;
 		}
-		int col_count( xui::element_id parent ) const override
+		int col_count( xui::control_id parent ) const override
 		{
 			return (int)items.size();
 		}
-		value_t item_data( xui::element_id id, int role ) override
+		value_t item_data( xui::control_id id, int role ) override
 		{
 			int idx = 0;
 			std::from_chars( id.data(), id.data() + id.size(), idx );
@@ -1270,7 +1278,7 @@ namespace xui
 
 			return {};
 		}
-		void item_data( xui::element_id id, int role, const value_t & val ) override
+		void item_data( xui::control_id id, int role, const value_t & val ) override
 		{
 			int idx = 0;
 			std::from_chars( id.data(), id.data() + id.size(), idx );
