@@ -5,9 +5,6 @@ static bool radio_value = false;
 static float slider_value = 0;
 static float vscollbar_value = 0;
 static float hscollbar_value = 0;
-static bool slider_select = false;
-static bool vscrollbar_select = false;
-static bool hscrollbar_select = false;
 
 int main()
 {
@@ -75,7 +72,7 @@ int main()
 						ctx.pop_window_rect();
 
 						ctx.push_window_rect( { 100, 200, 100, 100 } );
-						ctx.slider( slider_select, slider_value, 0, 1 );
+						ctx.slider( slider_value, 0, 1 );
 						ctx.pop_window_rect();
 
 						ctx.push_window_rect( { 100, 300, 100, 100 } );
@@ -93,11 +90,11 @@ int main()
 						auto rect = ctx.current_window_rect();
 
 						ctx.push_window_rect( { rect.x + rect.w - 20, rect.y, 20, rect.h - 20 } );
-						ctx.scrollbar( vscrollbar_select, vscollbar_value, 0.1f, 0, 1, xui::direction::TOP_BOTTOM );
+						ctx.scrollbar( vscollbar_value, 0.1f, 0, 1, xui::direction::TOP_BOTTOM );
 						ctx.pop_window_rect();
 
 						ctx.push_window_rect( { rect.x, rect.y + rect.h - 20, rect.w - 20, 20 } );
-						ctx.scrollbar( hscrollbar_select, hscollbar_value, 0.1f, 0, 1, xui::direction::LEFT_RIGHT );
+						ctx.scrollbar( hscollbar_value, 0.1f, 0, 1, xui::direction::LEFT_RIGHT );
 						ctx.pop_window_rect();
 
 

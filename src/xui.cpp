@@ -1089,6 +1089,7 @@ public:
         , _strids( res )
         , _windows( res )
         , _textures( res )
+        , _hot_control_ids( res )
     {
     }
 
@@ -1101,9 +1102,7 @@ public:
     std::pmr::vector<xui::drawcmd> _commands;
 
 public:
-    size_t _z = 0;
-    size_t _str_id = 0;
-    xui::control_id _hot_control_id;
+    size_t _control_id_counter = 0;
     std::pmr::deque<bool> _disables;
     std::pmr::deque<info_type> _infos;
     std::pmr::deque<xui::rect> _rects;
@@ -1113,6 +1112,7 @@ public:
     std::pmr::deque<std::string> _strids;
     std::pmr::deque<xui::window_id> _windows;
     std::pmr::deque<xui::texture_id> _textures;
+    std::pmr::map<xui::window_id, std::string> _hot_control_ids;
 };
 
 xui::context::context( std::pmr::memory_resource * res )
@@ -1352,7 +1352,7 @@ std::string_view xui::context::light_style()
     return "";
 }
 
-void xui::context::init( implement * impl )
+void xui::context::init( xui::implement * impl )
 {
     _p->_impl = impl;
 }
@@ -1365,50 +1365,6 @@ void xui::context::release()
 void xui::context::set_scale( float factor )
 {
     _p->_factor = factor;
-}
-
-xui::event_status xui::context::current_event_status( bool * selected )
-{
-    bool _selected = false;
-    if ( selected == nullptr ) selected = &_selected;
-
-    auto wid = current_window_id();
-    auto cid = current_control_id();
-    auto rect = current_window_rect();
-    auto pos = _p->_impl->get_cursor_pos( wid );
-
-    xui::event_status status = event_status::NORMAL;
-
-    if ( _p->_impl->get_event( wid, xui::event::WINDOW_ACTIVE ) )
-    {
-        if ( current_disable() )
-        {
-            status = event_status::DISABLED;
-        }
-        else if ( *selected == true )
-        {
-            status = event_status::ACTIVE;
-        }
-        else if ( _p->_impl->get_event( wid, xui::event::KEY_MOUSE_LEFT ) && rect.contains( pos ) )
-        {
-            status = event_status::ACTIVE;
-        }
-        else if ( rect.contains( pos ) )
-        {
-            status = event_status::HOVER;
-        }
-    }
-
-    if ( status == event_status::ACTIVE )
-    {
-        *selected = true;
-    }
-    else
-    {
-        *selected = false;
-    }
-
-    return status;
 }
 
 void xui::context::push_style( xui::style * style )
@@ -1451,7 +1407,6 @@ std::string xui::context::current_style_name() const
             case xui::HOVER: result.append( "hover" ); break;
             case xui::ACTIVE: result.append( "active" ); break;
             case xui::DISABLED: result.append( "disabled" ); break;
-            case xui::SELECTED: result.append( "selected" ); break;
             }
         }
     }
@@ -1644,9 +1599,67 @@ xui::control_id xui::context::current_control_id() const
     return _p->_strids.back();
 }
 
+void xui::context::set_hot_control_id( xui::control_id id )
+{
+    _p->_hot_control_ids[current_window_id()] = id;
+}
+
+xui::control_id xui::context::get_hot_control_id() const
+{
+    return _p->_hot_control_ids[current_window_id()];
+}
+
+xui::event_status xui::context::current_event_status( bool set_hot )
+{
+    auto wid = current_window_id();
+    auto cid = current_control_id();
+    auto hid = get_hot_control_id();
+
+    auto rect = current_window_rect();
+    auto pos = _p->_impl->get_cursor_pos( wid );
+
+    xui::event_status status = event_status::NORMAL;
+
+    if ( !hid.empty() )
+    {
+        if ( hid == cid )
+        {
+            if ( _p->_impl->get_event( wid, xui::event::KEY_MOUSE_LEFT ) == 0 )
+            {
+                set_hot_control_id( {} );
+            }
+            else
+            {
+                status = event_status::ACTIVE;
+            }
+        }
+    }
+    else if ( _p->_impl->get_event( wid, xui::event::WINDOW_ACTIVE ) )
+    {
+        if ( current_disable() )
+        {
+            status = event_status::DISABLED;
+        }
+        else if ( _p->_impl->get_event( wid, xui::event::KEY_MOUSE_LEFT ) && rect.contains( pos ) )
+        {
+            status = event_status::ACTIVE;
+            if ( set_hot )
+            {
+                set_hot_control_id( cid );
+            }
+        }
+        else if ( rect.contains( pos ) )
+        {
+            status = event_status::HOVER;
+        }
+    }
+
+    return status;
+}
+
 void xui::context::begin()
 {
-    _p->_str_id = 0;
+    _p->_control_id_counter = 0;
     _p->_commands.clear();
 }
 
@@ -1669,12 +1682,12 @@ std::span<xui::drawcmd> xui::context::end()
 
 bool xui::context::begin_window( std::string_view title, xui::texture_id icon_id, int flags )
 {
-    return begin_window( std::format( "_window_{}", _p->_str_id++ ), title, icon_id, flags );
+    return begin_window( std::format( "_window_{}", _p->_control_id_counter++ ), title, icon_id, flags );
 }
 
-bool xui::context::begin_window( xui::control_id eid, std::string_view title, xui::texture_id icon_id, int flags )
+bool xui::context::begin_window( xui::control_id ctl_id, std::string_view title, xui::texture_id icon_id, int flags )
 {
-    push_control_id( eid );
+    push_control_id( ctl_id );
     {
         window_type t;
         t.flags = flags;
@@ -1716,6 +1729,9 @@ bool xui::context::begin_window( xui::control_id eid, std::string_view title, xu
 
 void xui::context::end_window()
 {
+    if ( !get_hot_control_id().empty() )
+        std::cout << "hot control id: " << get_hot_control_id() << std::endl;
+    
     auto t = std::get<window_type>( _p->_infos.back() );
     _p->_infos.pop_back();
 
@@ -1895,14 +1911,14 @@ void xui::context::end_window()
 
 bool xui::context::image( xui::texture_id id )
 {
-    return image( std::format( "_image_{}", _p->_str_id++ ), id );
+    return image( std::format( "_image_{}", _p->_control_id_counter++ ), id );
 }
 
-bool xui::context::image( xui::control_id eid, xui::texture_id id )
+bool xui::context::image( xui::control_id ctl_id, xui::texture_id id )
 {
     draw_style_type( "image", [&]()
     {
-        draw_element_id( eid, [&]()
+        draw_control_id( ctl_id, [&]()
         {
             draw_image( id, current_window_rect() );
         } );
@@ -1912,14 +1928,14 @@ bool xui::context::image( xui::control_id eid, xui::texture_id id )
 
 bool xui::context::label( std::string_view text )
 {
-    return label( std::format( "_label_{}", _p->_str_id++ ), text );
+    return label( std::format( "_label_{}", _p->_control_id_counter++ ), text );
 }
 
-bool xui::context::label( xui::control_id eid, std::string_view text )
+bool xui::context::label( xui::control_id ctl_id, std::string_view text )
 {
     draw_style_type( "label", [&]()
     {
-        draw_element_id( eid, [&]()
+        draw_control_id( ctl_id, [&]()
         {
             draw_text( text, current_font_id(), current_window_rect(), current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
         } );
@@ -1929,14 +1945,14 @@ bool xui::context::label( xui::control_id eid, std::string_view text )
 
 bool xui::context::radio( bool & checked )
 {
-    return radio( std::format( "_radio_{}", _p->_str_id++ ), checked );
+    return radio( std::format( "_radio_{}", _p->_control_id_counter++ ), checked );
 }
 
-bool xui::context::radio( xui::control_id eid, bool & checked )
+bool xui::context::radio( xui::control_id ctl_id, bool & checked )
 {
     draw_style_type( "radio", [&]()
     {
-        draw_element_id( eid, [&]()
+        draw_control_id( ctl_id, [&]()
         {
             auto id = current_window_id();
             auto rect = current_window_rect();
@@ -1968,14 +1984,14 @@ bool xui::context::radio( xui::control_id eid, bool & checked )
 
 bool xui::context::check( bool & checked )
 {
-    return check( std::format( "_check_{}", _p->_str_id++ ), checked );
+    return check( std::format( "_check_{}", _p->_control_id_counter++ ), checked );
 }
 
-bool xui::context::check( xui::control_id eid, bool & checked )
+bool xui::context::check( xui::control_id ctl_id, bool & checked )
 {
     draw_style_type( "check", [&]()
     {
-        draw_element_id( eid, [&]()
+        draw_control_id( ctl_id, [&]()
         {
             auto id = current_window_id();
             auto rect = current_window_rect();
@@ -2010,16 +2026,16 @@ bool xui::context::check( xui::control_id eid, bool & checked )
 
 bool xui::context::button( std::string_view text )
 {
-    return button( std::format( "_button_{}", _p->_str_id++ ), text );
+    return button( std::format( "_button_{}", _p->_control_id_counter++ ), text );
 }
 
-bool xui::context::button( xui::control_id eid, std::string_view text )
+bool xui::context::button( xui::control_id ctl_id, std::string_view text )
 {
     xui::event_status status;
 
     draw_style_type( "button", [&]()
     {
-        draw_element_id( eid, [&]()
+        draw_control_id( ctl_id, [&]()
         {
             auto id = current_window_id();
             auto rect = current_window_rect();
@@ -2047,21 +2063,21 @@ bool xui::context::button( xui::control_id eid, std::string_view text )
     return status == xui::event_status::ACTIVE;
 }
 
-float xui::context::slider( bool & selected, float & value, float min, float max )
+float xui::context::slider( float & value, float min, float max )
 {
-    return slider( std::format( "_slider_{}", _p->_str_id++ ), selected, value, min, max );
+    return slider( std::format( "_slider_{}", _p->_control_id_counter++ ), value, min, max );
 }
 
-float xui::context::slider( xui::control_id eid, bool & selected, float & value, float min, float max )
+float xui::context::slider( xui::control_id ctl_id, float & value, float min, float max )
 {
     draw_style_type( "slider", [&]()
     {
-        draw_element_id( eid, [&]()
+        draw_control_id( ctl_id, [&]()
         {
             auto id = current_window_id();
             auto back_rect = current_window_rect();
             xui::vec2 pos = _p->_impl->get_cursor_pos( id );
-            xui::event_status status = current_event_status( &selected );
+            xui::event_status status = current_event_status( true );
 
             draw_style_status( status, [&]()
             {
@@ -2167,14 +2183,14 @@ float xui::context::slider( xui::control_id eid, bool & selected, float & value,
 
 bool xui::context::process( float value, float min, float max, std::string_view text )
 {
-    return process( std::format( "_process_{}", _p->_str_id++ ), value, min, max, text );
+    return process( std::format( "_process_{}", _p->_control_id_counter++ ), value, min, max, text );
 }
 
-bool xui::context::process( xui::control_id eid, float value, float min, float max, std::string_view text )
+bool xui::context::process( xui::control_id ctl_id, float value, float min, float max, std::string_view text )
 {
     draw_style_type( "process", [&]()
     {
-        draw_element_id( eid, [&]()
+        draw_control_id( ctl_id, [&]()
         {
             auto back_rect = current_window_rect();
 
@@ -2218,16 +2234,16 @@ bool xui::context::process( xui::control_id eid, float value, float min, float m
     return true;
 }
 
-float xui::context::scrollbar( bool & selected, float & value, float step, float min, float max, xui::direction dir )
+float xui::context::scrollbar( float & value, float step, float min, float max, xui::direction dir )
 {
-    return scrollbar( std::format( "_scrollbar_{}", _p->_str_id++ ), selected, value, step, min, max, dir );
+    return scrollbar( std::format( "_scrollbar_{}", _p->_control_id_counter++ ), value, step, min, max, dir );
 }
 
-float xui::context::scrollbar( xui::control_id eid, bool & selected, float & value, float step, float min, float max, xui::direction dir )
+float xui::context::scrollbar( xui::control_id ctl_id, float & value, float step, float min, float max, xui::direction dir )
 {
     draw_style_type( "scrollbar", [&]()
     {
-        draw_element_id( eid, [&]()
+        draw_control_id( ctl_id, [&]()
         {
             auto id = current_window_id();
             auto back_rect = current_window_rect();
@@ -2254,14 +2270,14 @@ float xui::context::scrollbar( xui::control_id eid, bool & selected, float & val
                     detect_rect = { back_rect.x + arrow_radius,  back_rect.y, back_rect.w - arrow_radius * 2, back_rect.h };
                     draw_window_rect( detect_rect, [&]()
                     {
-                        status = current_event_status( &selected );
+                        status = current_event_status( true );
                     } );
                     break;
                 case xui::direction::TOP_BOTTOM:
                 case xui::direction::BOTTOM_TOP:
                     detect_rect = { back_rect.x,  back_rect.y + arrow_radius, back_rect.w, back_rect.h - arrow_radius * 2 };
                     push_window_rect( detect_rect );
-                    status = current_event_status( &selected );
+                    status = current_event_status( true );
                     pop_window_rect();
                     break;
                 default:
@@ -2472,14 +2488,14 @@ float xui::context::scrollbar( xui::control_id eid, bool & selected, float & val
 
 bool xui::context::menu( xui::item_model * model )
 {
-    return menu( std::format( "_menu_{}", _p->_str_id++ ), model );
+    return menu( std::format( "_menu_{}", _p->_control_id_counter++ ), model );
 }
 
-bool xui::context::menu( xui::control_id eid, xui::item_model * model )
+bool xui::context::menu( xui::control_id ctl_id, xui::item_model * model )
 {
     draw_style_element( "menu", [&]()
     {
-        draw_element_id( eid, [&]()
+        draw_control_id( ctl_id, [&]()
         {
             auto rect = current_window_rect();
 
@@ -2537,13 +2553,13 @@ bool xui::context::menu_item( int row, int col, xui::control_id parent, xui::ite
 
     draw_style_element( "item", [&]()
     {
-        draw_element_id( id, [&]()
+        draw_control_id( id, [&]()
         {
             auto rect = current_window_rect();
 
             draw_window_rect( rect, [&]()
             {
-                xui::event_status status = current_event_status( &select );
+                xui::event_status status = current_event_status();
                 model->item_data( id, menu_model::IS_SELECTED, select );
 
                 draw_style_status( status, [&]()
@@ -2614,14 +2630,12 @@ bool xui::context::menu_item( int row, int col, xui::control_id parent, xui::ite
 
 bool xui::context::menubar( xui::item_model * model )
 {
-    return menubar( std::format( "_menubar_{}", _p->_str_id++ ), model );
-}
+    if ( model->control_id.empty() )
+        model->control_id = std::format( "_menubar_{}", _p->_control_id_counter++ );
 
-bool xui::context::menubar( xui::control_id eid, xui::item_model * model )
-{
     draw_style_type( "menubar", [&]()
     {
-        draw_element_id( eid, [&]()
+        draw_control_id( model->control_id, [&]()
         {
             auto rect = current_window_rect();
             xui::rect menubar_rect = { rect.x, rect.y - 1, rect.w, 30 };
@@ -2633,6 +2647,7 @@ bool xui::context::menubar( xui::control_id eid, xui::item_model * model )
                 while ( model->item_exist( row, 0, {} ) )
                 {
                     auto id = model->index( row, 0, {} );
+                    auto fid = std::format( "{}_{}", model->control_id, id );
                     auto icon = model->item_data( id, menubar_model::ICON ).value<xui::texture_id>();
                     auto name = model->item_data( id, menubar_model::NAME ).value<std::string>();
                     auto select = model->item_data( id, menubar_model::IS_SELECTED ).value<bool>();
@@ -2646,11 +2661,19 @@ bool xui::context::menubar( xui::control_id eid, xui::item_model * model )
 
                     item_rect.w += name_size.w;
 
-                    draw_element_id( id, [&]()
+                    draw_control_id( fid, [&]()
                     {
                         draw_window_rect( item_rect, [&]()
                         {
-                            xui::event_status status = current_event_status( &select );
+                            xui::event_status status = xui::event_status::NORMAL;
+                            
+                            auto hid = get_hot_control_id();
+                            if ( select && ( hid.empty() || hid == fid || model->is_child( hid, id ) ) )
+                                status = xui::event_status::ACTIVE;
+                            else
+                                status = current_event_status( true );
+
+                            select = status == xui::event_status::ACTIVE;
                             model->item_data( id, menubar_model::IS_SELECTED, select );
 
                             draw_style_status( status, [&]()
