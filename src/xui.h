@@ -686,7 +686,8 @@ namespace xui
 		};
 
 	public:
-		window_id id;
+		size_t z = 0;
+		window_id id = xui::invalid_window_id;
 		std::variant<std::monostate, text_element, line_element, rect_element, path_element, image_element, circle_element, ellipse_element, polygon_element> element;
 	};
 
@@ -694,6 +695,10 @@ namespace xui
 	{
 	private:
 		struct private_p;
+
+	public:
+		static constexpr const size_t popup_zvalue = 16384;
+		static constexpr const size_t window_zvalue = 65535;
 
 	public:
 		context( std::pmr::memory_resource * res = std::pmr::get_default_resource() );
@@ -769,17 +774,36 @@ namespace xui
 		void pop_disable();
 		bool current_disable() const;
 
+		void push_zvalue( size_t val );
+		void pop_zvalue();
+		size_t current_zvalue() const;
+
+		void push_viewport( const xui::rect & rect );
+		void pop_viewport();
+		xui::rect current_viewport() const;
+
 		void push_window_rect( const xui::rect & rect );
 		void pop_window_rect();
 		xui::rect current_window_rect() const;
-		void margins_current_window_rect( float left, float right, float top, float bottom );
 
 	public:
+		template<typename F> void draw_zvalue( size_t val, F && f )
+		{
+			push_zvalue( val );
+			f();
+			pop_zvalue();
+		}
 		template<typename F> void draw_disable( bool val, F && f )
 		{
 			push_disable( val );
 			f();
 			pop_disable();
+		}
+		template<typename F> void draw_viewport( const xui::rect & rect, F && f )
+		{
+			push_viewport( rect );
+			f();
+			pop_viewport();
 		}
 		template<typename F> void draw_window_rect( const xui::rect & rect, F && f )
 		{
@@ -832,9 +856,11 @@ namespace xui
 		}
 
 	public:
-		void set_hot_control_id( xui::control_id id );
+		xui::control_id get_act_control_id() const;
 		xui::control_id get_hot_control_id() const;
-		xui::event_status current_event_status( bool set_hot = false );
+		void set_act_control_id( xui::control_id id );
+		void set_hot_control_id( xui::control_id id );
+		xui::event_status current_event_status( bool hot = false );
 
 	public:
 		void begin();
@@ -864,10 +890,9 @@ namespace xui
 		float scrollbar( xui::control_id ctl_id, float & value, float step, float min, float max, xui::direction dir = xui::direction::TOP_BOTTOM );
 
 	public:
-		bool menu( xui::item_model * model );
-		bool menu( xui::control_id ctl_id, xui::item_model * model );
-		bool menu_item( int row, int col, xui::control_id parent, xui::item_model * model );
-		bool menubar( xui::item_model * model );
+		bool menu( xui::item_model * model, xui::control_id & ctl_id );
+		bool menu_item( int row, int col, xui::control_id parent, xui::item_model * model, xui::control_id & ctl_id );
+		bool menubar( xui::item_model * model, xui::control_id & ctl_id );
 
 	public:
 		bool begin_combobox();
@@ -974,6 +999,11 @@ namespace xui
 		};
 
 	public:
+		item_model( std::string_view cid )
+			: control_id( cid )
+		{
+		}
+
 		virtual ~item_model() = default;
 
 	public:
@@ -1018,53 +1048,63 @@ namespace xui
 
 		struct item
 		{
-			bool menu = false;
+			~item()
+			{
+				for ( auto it : childrens )
+					delete it;
+			}
+
 			bool selected = false;
 			xui::texture_id icon = xui::invalid_texture_id;
 			std::string name = {};
 			std::string shortcuts = {};
-			std::vector<item> childrens = {};
+			std::vector<item *> childrens = {};
 
 			std::string id = {};
 			std::string parent = {};
 		};
 
 	public:
-		menu_model()
+		menu_model( std::string_view cid )
+			: item_model( cid )
 		{
+			root.id = cid;
 			stack.push_back( &root );
+		}
+		~menu_model() override
+		{
+			for ( auto it : root.childrens )
+				delete it;
 		}
 
 	public:
 		void beg_menu( std::string_view name, xui::texture_id icon = xui::invalid_texture_id, std::string_view shortcuts = "" )
 		{
-			auto pid = stack.back()->id;
-			stack.back()->childrens.push_back( {} );
-			stack.push_back( &stack.back()->childrens.back() );
+			auto it = new item;
 
-			stack.back()->id = pid.empty() ? name : std::format( "{}_{}", pid, name );
-			stack.back()->menu = true;
-			stack.back()->name = name;
-			stack.back()->icon = icon;
-			stack.back()->parent = pid;
-			stack.back()->shortcuts = shortcuts;
+			it->id = std::format( "{}_{}", stack.back()->id, stack.back()->childrens.size() );
+			it->name = name;
+			it->icon = icon;
+			it->parent = stack.back()->id;
+			it->shortcuts = shortcuts;
+
+			stack.back()->childrens.push_back( it );
+
+			stack.push_back( it );
 		}
-		void add_item( std::string_view name, xui::texture_id icon = xui::invalid_texture_id, std::string_view shortcuts = "" )
+		xui::control_id add_item( std::string_view name, xui::texture_id icon = xui::invalid_texture_id, std::string_view shortcuts = "" )
 		{
-			item it;
+			auto it = new item;
 
-			auto pid = stack.back()->id;
-			stack.back()->childrens.push_back( {} );
-			stack.push_back( &stack.back()->childrens.back() );
+			it->id = std::format( "{}_{}", stack.back()->id, stack.back()->childrens.size() );
+			it->name = name;
+			it->icon = icon;
+			it->parent = stack.back()->id;
+			it->shortcuts = shortcuts;
 
-			stack.back()->id = pid.empty() ? name : std::format( "{}_{}", pid, name );
-			stack.back()->menu = true;
-			stack.back()->name = name;
-			stack.back()->icon = icon;
-			stack.back()->parent = pid;
-			stack.back()->shortcuts = shortcuts;
+			stack.back()->childrens.push_back( it );
 
-			stack.pop_back();
+			return it->id;
 		}
 		void end_menu()
 		{
@@ -1074,6 +1114,9 @@ namespace xui
 	public:
 		bool is_child( xui::control_id id, xui::control_id parent ) const override
 		{
+			if ( id.empty() || id == parent )
+				return false;
+
 			if ( auto item = find( id ) )
 			{
 				if ( parent != xui::invalid_control_id )
@@ -1101,6 +1144,7 @@ namespace xui
 
 			return false;
 		}
+		
 		xui::control_id parent( xui::control_id id ) const override
 		{
 			if ( auto it = find( id ) )
@@ -1120,7 +1164,7 @@ namespace xui
 			if ( auto it = find( parent ) )
 			{
 				if ( row < it->childrens.size() )
-					return it->childrens[row].id;
+					return it->childrens[row]->id;
 			}
 
 			return {};
@@ -1154,7 +1198,7 @@ namespace xui
 				case xui::menu_model::SHORTCUTS:
 					return it->shortcuts;
 				case xui::menu_model::IS_MENU:
-					return it->menu;
+					return !it->childrens.empty();
 				case xui::menu_model::IS_SELECTED:
 					return it->selected;
 				}
@@ -1178,41 +1222,26 @@ namespace xui
 			if ( id.empty() )
 				return &root;
 
-			item * result = nullptr;
+			if ( id == root.id )
+				return &root;
 
-			auto beg = id.begin();
-			auto it = id.begin();
+			if ( id.size() <= root.id.size() )
+				return nullptr;
 
-			while ( it != id.end() )
+			item * result = &root;
+
+			auto beg = id.begin() + root.id.size() + 1;
+			auto end = std::find( beg, id.end(), '_' );
+
+			while ( beg != id.end() )
 			{
-				while ( it != id.end() && *it != '_' ) ++it;
+				size_t i = 0;
+				std::from_chars( beg.operator->(), beg.operator->() + std::distance( beg, end ), i );
+				result = result->childrens[i];
 
-				std::string_view name{ beg, it };
-
-				if ( it != id.end() ) ++it;
-
-				beg = it;
-
-				if ( result == nullptr )
-				{
-					auto it2 = std::find_if( root.childrens.begin(), root.childrens.end(), [&]( const auto & val )
-					{
-						return val.name == name;
-					} );
-					if ( it2 == root.childrens.end() )
-						return nullptr;
-					result = it2.operator->();
-				}
-				else
-				{
-					auto it2 = std::find_if( result->childrens.begin(), result->childrens.end(), [&]( const auto & val )
-					{
-						return val.name == name;
-					} );
-					if ( it2 == result->childrens.end() )
-						return nullptr;
-					result = it2.operator->();
-				}
+				beg = end;
+				if ( end != id.end() ) beg += 1;
+				end = std::find( beg, id.end(), '_' );
 			}
 
 			return result;
@@ -1248,14 +1277,19 @@ namespace xui
 		};
 
 	public:
+		menubar_model( std::string_view cid )
+			: item_model( cid )
+		{ }
+
+	public:
 		menu_model * add_menu( std::string_view name, xui::texture_id icon = xui::invalid_texture_id, std::string_view shortcuts = "" )
 		{
 			items.push_back( {} );
 
-			items.back().id = std::to_string( items.size() - 1 );
+			items.back().id = std::format( "{}_{}", control_id, items.size() - 1 );
 			items.back().name = name;
 			items.back().icon = icon;
-			items.back().menu = new menu_model;
+			items.back().menu = new menu_model( items.back().id );
 			items.back().shortcuts = shortcuts;
 
 			return items.back().menu;
@@ -1317,25 +1351,22 @@ namespace xui
 		}
 		value_t item_data( xui::control_id id, int role ) override
 		{
-			int idx = 0;
-			std::from_chars( id.data(), id.data() + id.size(), idx );
-
-			if ( idx < items.size() )
+			if ( auto item = find( id ) )
 			{
 				switch ( role )
 				{
 				case xui::menubar_model::ID:
-					return items[idx].id;
+					return item->id;
 				case xui::menubar_model::ICON:
-					return items[idx].icon;
+					return item->icon;
 				case xui::menubar_model::NAME:
-					return items[idx].name;
+					return item->name;
 				case xui::menubar_model::MENUMODEL:
-					return items[idx].menu;
+					return item->menu;
 				case xui::menubar_model::SHORTCUTS:
-					return items[idx].shortcuts;
+					return item->shortcuts;
 				case xui::menubar_model::IS_SELECTED:
-					return items[idx].selected;
+					return item->selected;
 				}
 			}
 
@@ -1343,17 +1374,42 @@ namespace xui
 		}
 		void item_data( xui::control_id id, int role, const value_t & val ) override
 		{
-			int idx = 0;
-			std::from_chars( id.data(), id.data() + id.size(), idx );
-
-			if ( idx < items.size() && role == xui::menubar_model::IS_SELECTED )
+			if ( role == xui::menubar_model::IS_SELECTED )
 			{
-				items[idx].selected = std::get<bool>( val );
+				if ( auto item = find( id ) )
+				{
+					item->selected = std::get<bool>( val );
+				}
 			}
 		}
 
 	public:
-		std::vector<item> items;
+		item * find( xui::control_id id ) const
+		{
+			if ( id.empty() )
+				return nullptr;
+
+			if ( id == control_id )
+				return nullptr;
+
+			if ( id.size() <= control_id.size() )
+				return nullptr;
+
+			auto beg = id.begin() + control_id.size() + 1;
+			auto end = std::find( beg, id.end(), '_' );
+
+			if ( beg != id.end() )
+			{
+				size_t i = 0;
+				std::from_chars( beg.operator->(), beg.operator->() + std::distance( beg, end ), i );
+				return &items[i];
+			}
+
+			return nullptr;
+		}
+
+	public:
+		mutable std::vector<item> items;
 	};
 
 
