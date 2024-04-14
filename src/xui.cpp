@@ -1075,16 +1075,15 @@ public:
         , _commands( res )
         , _disables( res )
         , _zvalues( res )
-        , _rects( res )
         , _types( res )
         , _fonts( res )
-        , _strids( res )
+        , _ctl_ids( res )
         , _styles( res )
         , _viewports( res )
         , _windows( res )
         , _textures( res )
-        , _act_control_ids( res )
-        , _hot_control_ids( res )
+        , _act_ctl_id( res )
+        , _hot_ctl_id( res )
     {
     }
 
@@ -1098,19 +1097,18 @@ public:
 
 public:
     size_t _zvalue = 0;
-    size_t _control_id_counter = 0;
+    size_t _ctl_id_idx = 0;
     std::pmr::deque<bool> _disables;
     std::pmr::deque<size_t> _zvalues;
-    std::pmr::deque<xui::rect> _rects;
     std::pmr::deque<style_type> _types;
     std::pmr::deque<xui::font_id> _fonts;
-    std::pmr::deque<std::string> _strids;
+    std::pmr::deque<std::string> _ctl_ids;
     std::pmr::deque<xui::style *> _styles;
     std::pmr::deque<xui::rect> _viewports;
     std::pmr::deque<xui::window_id> _windows;
     std::pmr::deque<xui::texture_id> _textures;
-    std::pmr::map<xui::window_id, std::string> _act_control_ids;
-    std::pmr::map<xui::window_id, std::string> _hot_control_ids;
+    std::pmr::map<xui::window_id, std::string> _act_ctl_id;
+    std::pmr::map<xui::window_id, std::string> _hot_ctl_id;
 };
 
 xui::context::context( std::pmr::memory_resource * res )
@@ -1380,9 +1378,9 @@ std::string xui::context::current_style_name() const
 {
     std::string result;
 
-    if ( !_p->_strids.empty() )
+    if ( !_p->_ctl_ids.empty() )
     {
-        result.append( _p->_strids.back() );
+        result.append( _p->_ctl_ids.back() );
         result.append( "#" );
     }
 
@@ -1531,26 +1529,6 @@ xui::rect xui::context::current_viewport() const
     return _p->_viewports.back();
 }
 
-void xui::context::push_window_rect( const xui::rect & rect )
-{
-    _p->_rects.push_back( rect );
-}
-
-void xui::context::pop_window_rect()
-{
-    _p->_rects.pop_back();
-}
-
-xui::rect xui::context::current_window_rect() const
-{
-    if ( _p->_rects.empty() )
-    {
-        return {};
-    }
-
-    return _p->_rects.back();
-}
-
 void xui::context::push_font_id( xui::font_id font )
 {
     _p->_fonts.push_back( font );
@@ -1613,45 +1591,45 @@ xui::texture_id xui::context::current_texture_id() const
 
 void xui::context::push_control_id( xui::control_id id )
 {
-    _p->_strids.push_back( { id.begin(), id.end() } );
+    _p->_ctl_ids.push_back( { id.begin(), id.end() } );
 }
 
 void xui::context::pop_control_id()
 {
-    _p->_strids.pop_back();
+    _p->_ctl_ids.pop_back();
 }
 
 xui::control_id xui::context::current_control_id() const
 {
-    if ( _p->_strids.empty() )
+    if ( _p->_ctl_ids.empty() )
     {
         return {};
     }
 
-    return _p->_strids.back();
+    return _p->_ctl_ids.back();
 }
 
 xui::control_id xui::context::get_act_control_id() const
 {
-    return _p->_act_control_ids[current_window_id()];
+    return _p->_act_ctl_id[current_window_id()];
 }
 
 xui::control_id xui::context::get_hot_control_id() const
 {
-    return _p->_hot_control_ids[current_window_id()];
+    return _p->_hot_ctl_id[current_window_id()];
 }
 
 void xui::context::set_act_control_id( xui::control_id id )
 {
-    _p->_act_control_ids[current_window_id()] = id;
+    _p->_act_ctl_id[current_window_id()] = id;
 }
 
 void xui::context::set_hot_control_id( xui::control_id id )
 {
-    _p->_hot_control_ids[current_window_id()] = id;
+    _p->_hot_ctl_id[current_window_id()] = id;
 }
 
-xui::event_status xui::context::current_event_status( bool hot )
+xui::event_status xui::context::current_event_status( bool hot, xui::event event )
 {
     auto wid = current_window_id();
     auto cid = current_control_id();
@@ -1678,7 +1656,7 @@ xui::event_status xui::context::current_event_status( bool hot )
     }
     else if ( _p->_impl->get_event( wid, xui::event::WINDOW_ACTIVE ) )
     {
-        if ( _p->_impl->get_event( wid, xui::event::KEY_MOUSE_LEFT ) && rect.contains( pos ) )
+        if ( _p->_impl->get_event( wid, event ) && rect.contains( pos ) )
         {
             set_act_control_id( cid );
 
@@ -1697,23 +1675,23 @@ xui::event_status xui::context::current_event_status( bool hot )
 
 void xui::context::begin()
 {
-    _p->_zvalue = 0;
-    _p->_control_id_counter = 0;
-
     _p->_commands.clear();
 }
 
 std::span<xui::drawcmd> xui::context::end()
 {
-    _p->_disables.clear();
-    _p->_zvalues.clear();
-    _p->_rects.clear();
+    _p->_zvalue = 0;
+    _p->_ctl_id_idx = 0;
+
     _p->_types.clear();
     _p->_fonts.clear();
     _p->_styles.clear();
-    _p->_strids.clear();
+    _p->_ctl_ids.clear();
     _p->_windows.clear();
+    _p->_zvalues.clear();
     _p->_textures.clear();
+    _p->_disables.clear();
+    _p->_viewports.clear();
 
     std::sort( _p->_commands.begin(), _p->_commands.end(), []( const auto & left, const auto & right )
     {
@@ -1728,208 +1706,222 @@ std::span<xui::drawcmd> xui::context::end()
 
 bool xui::context::begin_window( std::string_view title, xui::texture_id icon_id, int flags )
 {
-    return begin_window( std::format( "_window_{}", _p->_control_id_counter++ ), title, icon_id, flags );
+    return begin_window( std::format( "_window_{}", _p->_ctl_id_idx++ ), title, icon_id, flags );
 }
 
 bool xui::context::begin_window( xui::control_id ctl_id, std::string_view title, xui::texture_id icon_id, int flags )
 {
-    push_control_id( ctl_id );
-
     auto wid = current_window_id();
     auto wrect = current_viewport();
     auto cursorpos = _p->_impl->get_cursor_pos( wid );
     auto window_status = _p->_impl->get_window_status( wid );
 
-    if ( ( window_status & xui::window_status::WINDOW_SHOW ) != 0 )
+    draw_control_id( ctl_id, [&]()
     {
-        if ( ( flags & xui::window_flag::WINDOW_NO_BACKGROUND ) == 0 )
+        if ( ( window_status & xui::window_status::WINDOW_SHOW ) != 0 )
         {
-            draw_zvalue( _p->_zvalue++, [&]()
+            if ( ( flags & xui::window_flag::WINDOW_NO_BACKGROUND ) == 0 )
             {
-                draw_style_type( "window", [&]()
+                draw_zvalue( _p->_zvalue++, [&]()
                 {
-                    draw_rect( wrect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-                } );
-            } );
-        }
-
-        draw_zvalue( window_zvalue + _p->_zvalue++, [&]()
-        {
-            draw_zvalue( _p->_zvalue++, [&]()
-            {
-                draw_style_type( "window", [&]()
-                {
-                    xui::rect title_rect = { 0, 0, wrect.w, 30 };
-                    xui::rect move_rect = { 0, 0, wrect.w - 150, 30 };
-                    xui::rect resize_rect = { wrect.x + ( wrect.w - 15 ), wrect.y + ( wrect.h - 15 ), 15, 15 };
-
-                    if ( ( flags & xui::window_flag::WINDOW_NO_TITLEBAR ) == 0 )
+                    draw_style_type( "window", [&]()
                     {
-                        wrect.y += 30;
-                        wrect.h -= 30;
+                        draw_rect( wrect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                    } );
+                } );
+            }
 
-                        draw_style_element( "titlebar", [&]()
+            draw_zvalue( window_zvalue + _p->_zvalue++, [&]()
+            {
+                draw_zvalue( _p->_zvalue++, [&]()
+                {
+                    draw_style_type( "window", [&]()
+                    {
+                        xui::rect title_rect = { 0, 0, wrect.w, 30 };
+                        xui::rect move_rect = { 0, 0, wrect.w - 150, 30 };
+                        xui::rect resize_rect = { wrect.x + ( wrect.w - 15 ), wrect.y + ( wrect.h - 15 ), 15, 15 };
+
+                        auto dt = _p->_impl->get_cursor_dt( wid );
+                        auto wr = _p->_impl->get_window_rect( wid );
+
+                        if ( ( flags & xui::window_flag::WINDOW_NO_MOVE ) == 0 )
                         {
-                            draw_rect( title_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-
-                            draw_image( icon_id, { 8, 5, 20, 20 } );
-
-                            draw_style_element( "title", [&]()
-                            {
-                                draw_text( title, current_font_id(), { 30, 5, wrect.w - 150, 20 }, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
-                            } );
-
-                            xui::rect box_rect = { title_rect.w, title_rect.y, 50, title_rect.h };
-
-                            draw_style_element( "closebox", [&]()
-                            {
-                                box_rect.x -= 50;
-
-                                draw_disable( ( flags & xui::window_flag::WINDOW_NO_CLOSEBOX ) != 0, [&]()
-                                {
-                                    draw_viewport( box_rect, [&]()
-                                    {
-                                        xui::event_status status = current_event_status();
-                                        draw_style_status( status, [&]()
-                                        {
-                                            draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-
-                                            draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
-                                                .moveto( { box_rect.center().x - 5, box_rect.center().y - 5 } )
-                                                .lineto( { box_rect.center().x + 5, box_rect.center().y + 5 } )
-                                                .closepath()
-                                                .moveto( { box_rect.center().x + 5, box_rect.center().y - 5 } )
-                                                .lineto( { box_rect.center().x - 5, box_rect.center().y + 5 } )
-                                                .closepath();
-                                        } );
-
-                                        if ( status == xui::event_status::ACTIVE ) _p->_impl->remove_window( wid );
-                                    } );
-                                } );
-                            } );
-
-                            draw_style_element( "maximizebox", [&]()
-                            {
-                                box_rect.x -= 49;
-
-                                draw_disable( ( flags & xui::window_flag::WINDOW_NO_MAXIMIZEBOX ) != 0, [&]()
-                                {
-                                    draw_viewport( box_rect, [&]()
-                                    {
-                                        xui::event_status status = current_event_status();
-                                        draw_style_status( status, [&]()
-                                        {
-                                            draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-
-                                            if ( ( window_status & xui::window_status::WINDOW_MAXIMIZE ) != 0 )
-                                            {
-                                                draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
-                                                    .moveto( { box_rect.center().x - 3, box_rect.center().y - 5 } )
-                                                    .lineto( { box_rect.center().x - 3, box_rect.center().y + 3 } )
-                                                    .lineto( { box_rect.center().x + 5, box_rect.center().y + 3 } )
-                                                    .lineto( { box_rect.center().x + 5, box_rect.center().y - 5 } )
-                                                    .lineto( { box_rect.center().x - 3, box_rect.center().y - 5 } )
-                                                    .closepath()
-                                                    .moveto( { box_rect.center().x - 5, box_rect.center().y - 3 } )
-                                                    .lineto( { box_rect.center().x - 5, box_rect.center().y + 5 } )
-                                                    .lineto( { box_rect.center().x + 3, box_rect.center().y + 5 } )
-                                                    .lineto( { box_rect.center().x + 3, box_rect.center().y - 3 } )
-                                                    .lineto( { box_rect.center().x - 5, box_rect.center().y - 3 } )
-                                                    .closepath();
-                                            }
-                                            else
-                                            {
-                                                draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
-                                                    .moveto( { box_rect.center().x - 5, box_rect.center().y - 5 } )
-                                                    .lineto( { box_rect.center().x - 5, box_rect.center().y + 5 } )
-                                                    .lineto( { box_rect.center().x + 5, box_rect.center().y + 5 } )
-                                                    .lineto( { box_rect.center().x + 5, box_rect.center().y - 5 } )
-                                                    .lineto( { box_rect.center().x - 5, box_rect.center().y - 5 } )
-                                                    .closepath();
-                                            }
-                                        } );
-
-                                        if ( status == xui::event_status::ACTIVE ) _p->_impl->set_window_status( wid, ( ( window_status & xui::window_status::WINDOW_MAXIMIZE ) != 0 ) ? xui::window_status::WINDOW_RESTORE : xui::window_status::WINDOW_MAXIMIZE );
-                                    } );
-                                } );
-                            } );
-
-                            draw_style_element( "minimizebox", [&]()
-                            {
-                                box_rect.x -= 48;
-
-                                draw_disable( ( flags & xui::window_flag::WINDOW_NO_MINIMIZEBOX ) != 0, [&]()
-                                {
-                                    draw_viewport( box_rect, [&]()
-                                    {
-                                        xui::event_status status = current_event_status();
-                                        draw_style_status( status, [&]()
-                                        {
-                                            draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-
-                                            draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
-                                                .moveto( { box_rect.center().x - 5, box_rect.center().y } )
-                                                .lineto( { box_rect.center().x + 5, box_rect.center().y } )
-                                                .closepath();
-                                        } );
-
-                                        if ( status == xui::event_status::ACTIVE ) _p->_impl->set_window_status( wid, xui::window_status::WINDOW_MINIMIZE );
-                                    } );
-                                } );
-                            } );
-
-                            if ( ( flags & xui::window_flag::WINDOW_NO_MOVE ) == 0 )
+                            draw_control_id( std::format( "{}_{}", current_control_id(), "move" ), [&]()
                             {
                                 draw_viewport( move_rect, [&]()
                                 {
                                     if ( current_event_status() == xui::event_status::ACTIVE )
                                     {
-                                        auto wr = _p->_impl->get_window_rect( wid );
-                                        auto dt = _p->_impl->get_cursor_dt( wid );
                                         _p->_impl->set_window_rect( wid, { wr.x + dt.x, wr.y + dt.y, wr.w, wr.h } );
                                     }
                                 } );
-                            }
-                        } );
-                    }
-                    if ( ( flags & xui::window_flag::WINDOW_NO_RESIZE ) == 0 )
-                    {
-                        draw_style_element( "resize", [&]()
-                        {
-                            draw_viewport( resize_rect, [&]()
-                            {
-                                if ( current_event_status() == xui::event_status::ACTIVE )
-                                {
-                                    auto wr = _p->_impl->get_window_rect( wid );
-                                    auto dt = _p->_impl->get_cursor_dt( wid );
-                                    _p->_impl->set_window_rect( wid, { wr.x, wr.y, std::max( wr.w + dt.x, 150.0f ), std::max( wr.h + dt.y, title_rect.h + resize_rect.h ) } );
-                                }
                             } );
+                        }
+                        if ( ( flags & xui::window_flag::WINDOW_NO_RESIZE ) == 0 )
+                        {
+                            draw_style_element( "resize", [&]()
+                            {
+                                draw_control_id( std::format( "{}_{}", current_control_id(), "resize" ), [&]()
+                                {
+                                    draw_viewport( resize_rect, [&]()
+                                    {
+                                        if ( current_event_status() == xui::event_status::ACTIVE )
+                                        {
+                                            _p->_impl->set_window_rect( wid, { wr.x, wr.y, std::max( wr.w + dt.x, 150.0f ), std::max( wr.h + dt.y, title_rect.h + resize_rect.h ) } );
+                                        }
+                                    } );
+                                } );
 
-                            draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
-                                .moveto( { resize_rect.x, resize_rect.y + resize_rect.h } )
-                                .lineto( { resize_rect.x + resize_rect.w, resize_rect.y + resize_rect.h } )
-                                .lineto( { resize_rect.x + resize_rect.w, resize_rect.y } )
-                                .lineto( { resize_rect.x, resize_rect.y + resize_rect.h } )
-                                .closepath();
-                        } );
-                    }
+                                draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                                    .moveto( { resize_rect.x, resize_rect.y + resize_rect.h } )
+                                    .lineto( { resize_rect.x + resize_rect.w, resize_rect.y + resize_rect.h } )
+                                    .lineto( { resize_rect.x + resize_rect.w, resize_rect.y } )
+                                    .lineto( { resize_rect.x, resize_rect.y + resize_rect.h } )
+                                    .closepath();
+                            } );
+                        }
+                        if ( ( flags & xui::window_flag::WINDOW_NO_TITLEBAR ) == 0 )
+                        {
+                            draw_style_element( "titlebar", [&]()
+                            {
+                                wrect.y += 30;
+                                wrect.h -= 30;
+
+                                draw_rect( title_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+
+                                draw_image( icon_id, { 8, 5, 20, 20 } );
+
+                                draw_style_element( "title", [&]()
+                                {
+                                    draw_text( title, current_font_id(), { 30, 5, wrect.w - 150, 20 }, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
+                                } );
+
+                                xui::rect box_rect = { title_rect.w, title_rect.y, 50, title_rect.h };
+
+                                draw_control_id( std::format( "{}_{}", current_control_id(), "closebox" ), [&]()
+                                {
+                                    draw_style_element( "closebox", [&]()
+                                    {
+                                        box_rect.x -= 50;
+
+                                        draw_disable( ( flags & xui::window_flag::WINDOW_NO_CLOSEBOX ) != 0, [&]()
+                                        {
+                                            draw_viewport( box_rect, [&]()
+                                            {
+                                                xui::event_status status = current_event_status();
+                                                draw_style_status( status, [&]()
+                                                {
+                                                    draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+
+                                                    draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                                                        .moveto( { box_rect.center().x - 5, box_rect.center().y - 5 } )
+                                                        .lineto( { box_rect.center().x + 5, box_rect.center().y + 5 } )
+                                                        .closepath()
+                                                        .moveto( { box_rect.center().x + 5, box_rect.center().y - 5 } )
+                                                        .lineto( { box_rect.center().x - 5, box_rect.center().y + 5 } )
+                                                        .closepath();
+                                                } );
+
+                                                if ( status == xui::event_status::ACTIVE ) _p->_impl->remove_window( wid );
+                                            } );
+                                        } );
+                                    } );
+                                } );
+
+                                draw_control_id( std::format( "{}_{}", current_control_id(), "maximizebox" ), [&]()
+                                {
+                                    draw_style_element( "maximizebox", [&]()
+                                    {
+                                        box_rect.x -= 49;
+
+                                        draw_disable( ( flags & xui::window_flag::WINDOW_NO_MAXIMIZEBOX ) != 0, [&]()
+                                        {
+                                            draw_viewport( box_rect, [&]()
+                                            {
+                                                xui::event_status status = current_event_status( false, xui::event::KEY_MOUSE_LEFT_CLICK );
+                                                draw_style_status( status, [&]()
+                                                {
+                                                    draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+
+                                                    if ( ( window_status & xui::window_status::WINDOW_MAXIMIZE ) != 0 )
+                                                    {
+                                                        draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                                                            .moveto( { box_rect.center().x - 3, box_rect.center().y - 5 } )
+                                                            .lineto( { box_rect.center().x - 3, box_rect.center().y + 3 } )
+                                                            .lineto( { box_rect.center().x + 5, box_rect.center().y + 3 } )
+                                                            .lineto( { box_rect.center().x + 5, box_rect.center().y - 5 } )
+                                                            .lineto( { box_rect.center().x - 3, box_rect.center().y - 5 } )
+                                                            .closepath()
+                                                            .moveto( { box_rect.center().x - 5, box_rect.center().y - 3 } )
+                                                            .lineto( { box_rect.center().x - 5, box_rect.center().y + 5 } )
+                                                            .lineto( { box_rect.center().x + 3, box_rect.center().y + 5 } )
+                                                            .lineto( { box_rect.center().x + 3, box_rect.center().y - 3 } )
+                                                            .lineto( { box_rect.center().x - 5, box_rect.center().y - 3 } )
+                                                            .closepath();
+                                                    }
+                                                    else
+                                                    {
+                                                        draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                                                            .moveto( { box_rect.center().x - 5, box_rect.center().y - 5 } )
+                                                            .lineto( { box_rect.center().x - 5, box_rect.center().y + 5 } )
+                                                            .lineto( { box_rect.center().x + 5, box_rect.center().y + 5 } )
+                                                            .lineto( { box_rect.center().x + 5, box_rect.center().y - 5 } )
+                                                            .lineto( { box_rect.center().x - 5, box_rect.center().y - 5 } )
+                                                            .closepath();
+                                                    }
+                                                } );
+
+                                                if ( status == xui::event_status::ACTIVE )
+                                                {
+                                                    _p->_impl->set_window_status( wid, ( ( window_status & xui::window_status::WINDOW_MAXIMIZE ) != 0 ) ? xui::window_status::WINDOW_RESTORE : xui::window_status::WINDOW_MAXIMIZE );
+                                                }
+                                            } );
+                                        } );
+                                    } );
+                                } );
+
+                                draw_control_id( std::format( "{}_{}", current_control_id(), "minimizebox" ), [&]()
+                                {
+                                    draw_style_element( "minimizebox", [&]()
+                                    {
+                                        box_rect.x -= 48;
+
+                                        draw_disable( ( flags & xui::window_flag::WINDOW_NO_MINIMIZEBOX ) != 0, [&]()
+                                        {
+                                            draw_viewport( box_rect, [&]()
+                                            {
+                                                xui::event_status status = current_event_status();
+                                                draw_style_status( status, [&]()
+                                                {
+                                                    draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+
+                                                    draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                                                        .moveto( { box_rect.center().x - 5, box_rect.center().y } )
+                                                        .lineto( { box_rect.center().x + 5, box_rect.center().y } )
+                                                        .closepath();
+                                                } );
+
+                                                if ( status == xui::event_status::ACTIVE ) _p->_impl->set_window_status( wid, xui::window_status::WINDOW_MINIMIZE );
+                                            } );
+                                        } );
+                                    } );
+                                } );
+                            } );
+                        }
+                    } );
                 } );
             } );
-        } );
 
-        push_viewport( wrect );
+            push_viewport( wrect );
+        }
+    } );
 
-        return true;
-    }
-
-    return false;
+    return ( ( window_status & xui::window_status::WINDOW_SHOW ) != 0 );
 }
 
 void xui::context::end_window()
 {
     pop_viewport();
-    pop_control_id();
 
     auto id = current_window_id();
     auto wrect = current_viewport();
@@ -1938,11 +1930,7 @@ void xui::context::end_window()
     {
         set_act_control_id( {} );
     }
-
-    if ( get_act_control_id().empty()
-         && wrect.contains( _p->_impl->get_cursor_pos( id ) )
-         && _p->_impl->get_event( id, xui::event::WINDOW_ACTIVE )
-         && _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) )
+    if ( get_act_control_id().empty() && wrect.contains( _p->_impl->get_cursor_pos( id ) ) && _p->_impl->get_event( id, xui::event::WINDOW_ACTIVE ) && _p->_impl->get_event( id, xui::event::KEY_MOUSE_LEFT ) )
     {
         set_hot_control_id( {} );
     }
@@ -1950,7 +1938,7 @@ void xui::context::end_window()
 
 bool xui::context::image( xui::texture_id id )
 {
-    return image( std::format( "_image_{}", _p->_control_id_counter++ ), id );
+    return image( std::format( "_image_{}", _p->_ctl_id_idx++ ), id );
 }
 
 bool xui::context::image( xui::control_id ctl_id, xui::texture_id id )
@@ -1971,7 +1959,7 @@ bool xui::context::image( xui::control_id ctl_id, xui::texture_id id )
 
 bool xui::context::label( std::string_view text )
 {
-    return label( std::format( "_label_{}", _p->_control_id_counter++ ), text );
+    return label( std::format( "_label_{}", _p->_ctl_id_idx++ ), text );
 }
 
 bool xui::context::label( xui::control_id ctl_id, std::string_view text )
@@ -1992,7 +1980,7 @@ bool xui::context::label( xui::control_id ctl_id, std::string_view text )
 
 bool xui::context::radio( bool & checked )
 {
-    return radio( std::format( "_radio_{}", _p->_control_id_counter++ ), checked );
+    return radio( std::format( "_radio_{}", _p->_ctl_id_idx++ ), checked );
 }
 
 bool xui::context::radio( xui::control_id ctl_id, bool & checked )
@@ -2007,7 +1995,7 @@ bool xui::context::radio( xui::control_id ctl_id, bool & checked )
                 auto rect = current_viewport();
                 float raduis = std::min( rect.w, rect.h ) / 2;
 
-                xui::event_status status = current_event_status();
+                xui::event_status status = current_event_status( false, xui::event::KEY_MOUSE_LEFT_CLICK );
                 if ( status == xui::event_status::ACTIVE )
                     checked = !checked;
 
@@ -2035,7 +2023,7 @@ bool xui::context::radio( xui::control_id ctl_id, bool & checked )
 
 bool xui::context::check( bool & checked )
 {
-    return check( std::format( "_check_{}", _p->_control_id_counter++ ), checked );
+    return check( std::format( "_check_{}", _p->_ctl_id_idx++ ), checked );
 }
 
 bool xui::context::check( xui::control_id ctl_id, bool & checked )
@@ -2051,7 +2039,7 @@ bool xui::context::check( xui::control_id ctl_id, bool & checked )
                 rect.w = std::min( rect.w, rect.h );
                 rect.h = rect.w;
 
-                xui::event_status status = current_event_status();
+                xui::event_status status = current_event_status( false, xui::event::KEY_MOUSE_LEFT_CLICK );
                 if ( status == xui::event_status::ACTIVE ) checked = !checked;
 
                 draw_style_status( status, [&]()
@@ -2081,7 +2069,7 @@ bool xui::context::check( xui::control_id ctl_id, bool & checked )
 
 bool xui::context::button( std::string_view text )
 {
-    return button( std::format( "_button_{}", _p->_control_id_counter++ ), text );
+    return button( std::format( "_button_{}", _p->_ctl_id_idx++ ), text );
 }
 
 bool xui::context::button( xui::control_id ctl_id, std::string_view text )
@@ -2097,7 +2085,7 @@ bool xui::context::button( xui::control_id ctl_id, std::string_view text )
                 auto id = current_window_id();
                 auto rect = current_viewport();
 
-                status = current_event_status();
+                status = current_event_status( false, xui::event::KEY_MOUSE_LEFT_CLICK );
 
                 draw_style_status( status, [&]()
                 {
@@ -2123,7 +2111,7 @@ bool xui::context::button( xui::control_id ctl_id, std::string_view text )
 
 float xui::context::slider( float & value, float min, float max )
 {
-    return slider( std::format( "_slider_{}", _p->_control_id_counter++ ), value, min, max );
+    return slider( std::format( "_slider_{}", _p->_ctl_id_idx++ ), value, min, max );
 }
 
 float xui::context::slider( xui::control_id ctl_id, float & value, float min, float max )
@@ -2245,7 +2233,7 @@ float xui::context::slider( xui::control_id ctl_id, float & value, float min, fl
 
 bool xui::context::process( float value, float min, float max, std::string_view text )
 {
-    return process( std::format( "_process_{}", _p->_control_id_counter++ ), value, min, max, text );
+    return process( std::format( "_process_{}", _p->_ctl_id_idx++ ), value, min, max, text );
 }
 
 bool xui::context::process( xui::control_id ctl_id, float value, float min, float max, std::string_view text )
@@ -2302,7 +2290,7 @@ bool xui::context::process( xui::control_id ctl_id, float value, float min, floa
 
 float xui::context::scrollbar( float & value, float step, float min, float max, xui::direction dir )
 {
-    return scrollbar( std::format( "_scrollbar_{}", _p->_control_id_counter++ ), value, step, min, max, dir );
+    return scrollbar( std::format( "_scrollbar_{}", _p->_ctl_id_idx++ ), value, step, min, max, dir );
 }
 
 float xui::context::scrollbar( xui::control_id ctl_id, float & value, float step, float min, float max, xui::direction dir )
@@ -2556,7 +2544,7 @@ float xui::context::scrollbar( xui::control_id ctl_id, float & value, float step
     return value;
 }
 
-bool xui::context::menu( xui::item_model * model, xui::control_id & ctl_id )
+bool xui::context::menu( xui::item_model * model, xui::control_id & select_id )
 {
     draw_zvalue( popup_zvalue + _p->_zvalue++, [&]()
     {
@@ -2597,7 +2585,7 @@ bool xui::context::menu( xui::item_model * model, xui::control_id & ctl_id )
                         xui::rect sub_item_rect = { list_rect.x, list_rect.y + row * 30, list_rect.w, 30 };
                         draw_viewport( sub_item_rect, [&]()
                         {
-                            menu_item( row, 0, {}, model, ctl_id );
+                            menu_item( row, 0, {}, model, select_id );
                         } );
                     }
                 }
@@ -2605,7 +2593,7 @@ bool xui::context::menu( xui::item_model * model, xui::control_id & ctl_id )
         } );
     } );
 
-    if ( !ctl_id.empty() )
+    if ( !select_id.empty() )
     {
         for ( int row = 0; model->item_exist( row, 0, {} ); ++row )
         {
@@ -2618,10 +2606,10 @@ bool xui::context::menu( xui::item_model * model, xui::control_id & ctl_id )
         }
     }
 
-    return !ctl_id.empty();
+    return !select_id.empty();
 }
 
-bool xui::context::menu_item( int row, int col, xui::control_id parent, xui::item_model * model, xui::control_id & ctl_id )
+bool xui::context::menu_item( int row, int col, xui::control_id parent, xui::item_model * model, xui::control_id & select_id )
 {
     auto id = model->index( row, col, parent );
     auto icon = model->item_data( id, menu_model::ICON ).value<xui::texture_id>();
@@ -2677,7 +2665,7 @@ bool xui::context::menu_item( int row, int col, xui::control_id parent, xui::ite
 
                     if ( menu == false && status == xui::event_status::ACTIVE )
                     {
-                        ctl_id = id;
+                        select_id = id;
                     }
                 } );
             } );
@@ -2713,17 +2701,17 @@ bool xui::context::menu_item( int row, int col, xui::control_id parent, xui::ite
                     xui::rect sub_item_rect = { list_rect.x, list_rect.y + row * 30, list_rect.w, 30 };
                     draw_viewport( sub_item_rect, [&]()
                     {
-                        menu_item( row, 0, id, model, ctl_id );
+                        menu_item( row, 0, id, model, select_id );
                     } );
                 }
             }
         }
     } );
 
-    return !ctl_id.empty();
+    return !select_id.empty();
 }
 
-bool xui::context::menubar( xui::item_model * model, xui::control_id & ctl_id )
+bool xui::context::menubar( xui::item_model * model, xui::control_id & select_id )
 {
     draw_zvalue( popup_zvalue + _p->_zvalue++, [&]()
     {
@@ -2790,7 +2778,7 @@ bool xui::context::menubar( xui::item_model * model, xui::control_id & ctl_id )
                         if ( select )
                             draw_viewport( { item_rect.x, item_rect.y + item_rect.h, rect.w - ( item_rect.x - rect.x ), rect.h }, [&]()
                         {
-                            menu( menu_model, ctl_id );
+                            menu( menu_model, select_id );
                         } );
 
                         menubar_rect = menubar_rect.margins_added( item_rect.w, 0, 0, 0 );
@@ -2804,7 +2792,7 @@ bool xui::context::menubar( xui::item_model * model, xui::control_id & ctl_id )
         } );
     } );
     
-    if ( !ctl_id.empty() )
+    if ( !select_id.empty() )
     {
         for ( int row = 0; model->item_exist( row, 0, {} ); ++row )
         {
@@ -2817,7 +2805,7 @@ bool xui::context::menubar( xui::item_model * model, xui::control_id & ctl_id )
         }
     }
 
-    return !ctl_id.empty();
+    return !select_id.empty();
 }
 
 xui::drawcmd::text_element & xui::context::draw_text( std::string_view text, xui::font_id id, const xui::rect & rect, const xui::color & font_color, xui::alignment_flag text_align )

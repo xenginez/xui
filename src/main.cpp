@@ -32,10 +32,9 @@ int main()
 			ctx.push_style( &style );
 			ctx.push_font_id( font );
 			ctx.push_window_id( window );
-			ctx.push_window_rect( rect );
-			ctx.push_viewport( { 0, 0, rect.w,  rect.h } );
+			ctx.push_viewport( { 0, 0, rect.w, rect.h } );
 			{
-				ctx.begin_window( "³¬¼¶UI", icon, xui::window_flag::WINDOW_NO_MINIMIZEBOX );
+				ctx.begin_window( "³¬¼¶UI", icon );
 				{
 					static xui::menubar_model menubar_m = []()
 					{
@@ -116,7 +115,6 @@ int main()
 				ctx.end_window();
 			}
 			ctx.pop_viewport();
-			ctx.pop_window_rect();
 			ctx.pop_window_id();
 			ctx.pop_font_id();
 			ctx.pop_style();

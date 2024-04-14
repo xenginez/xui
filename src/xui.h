@@ -5,6 +5,7 @@
 #include <format>
 #include <string>
 #include <variant>
+#include <iostream>
 #include <optional>
 #include <functional>
 #include <system_error>
@@ -47,6 +48,7 @@ namespace xui
 	class implement;
 
 	class item_model;
+	class menu_model;
 	class menubar_model;
 	class combobox_model;
 	class treeview_model;
@@ -147,6 +149,9 @@ namespace xui
 		KEY_MOUSE_LEFT = MOUSE_EVENT_BEG,
 		KEY_MOUSE_RIGHT,
 		KEY_MOUSE_MIDDLE,
+		KEY_MOUSE_LEFT_CLICK,
+		KEY_MOUSE_RIGHT_CLICK,
+		KEY_MOUSE_MIDDLE_CLICK,
 		KEY_MOUSE_LEFT_DBCLICK,
 		KEY_MOUSE_RIGHT_DBCLICK,
 		KEY_MOUSE_MIDDLE_DBCLICK,
@@ -198,6 +203,13 @@ namespace xui
 		WINDOW_NO_CLOSEBOX = 1 << 8,
 		WINDOW_NO_MINIMIZEBOX = 1 << 9,
 		WINDOW_NO_MAXIMIZEBOX = 1 << 10,
+	};
+	enum modifier_flag
+	{
+		ALT = 1 << 0,
+		CTRL = 1 << 1,
+		SHIFT = 1 << 2,
+		CAPSLOCK = 1 << 3,
 	};
 	enum alignment_flag
 	{
@@ -782,10 +794,6 @@ namespace xui
 		void pop_viewport();
 		xui::rect current_viewport() const;
 
-		void push_window_rect( const xui::rect & rect );
-		void pop_window_rect();
-		xui::rect current_window_rect() const;
-
 	public:
 		template<typename F> void draw_zvalue( size_t val, F && f )
 		{
@@ -804,12 +812,6 @@ namespace xui
 			push_viewport( rect );
 			f();
 			pop_viewport();
-		}
-		template<typename F> void draw_window_rect( const xui::rect & rect, F && f )
-		{
-			push_window_rect( rect );
-			f();
-			pop_window_rect();
 		}
 
 	public:
@@ -860,7 +862,7 @@ namespace xui
 		xui::control_id get_hot_control_id() const;
 		void set_act_control_id( xui::control_id id );
 		void set_hot_control_id( xui::control_id id );
-		xui::event_status current_event_status( bool hot = false );
+		xui::event_status current_event_status( bool hot = false, xui::event event = xui::event::KEY_MOUSE_LEFT );
 
 	public:
 		void begin();
@@ -890,9 +892,8 @@ namespace xui
 		float scrollbar( xui::control_id ctl_id, float & value, float step, float min, float max, xui::direction dir = xui::direction::TOP_BOTTOM );
 
 	public:
-		bool menu( xui::item_model * model, xui::control_id & ctl_id );
-		bool menu_item( int row, int col, xui::control_id parent, xui::item_model * model, xui::control_id & ctl_id );
-		bool menubar( xui::item_model * model, xui::control_id & ctl_id );
+		bool menu( xui::item_model * model, xui::control_id & select_id );
+		bool menubar( xui::item_model * model, xui::control_id & select_id );
 
 	public:
 		bool begin_combobox();
@@ -930,6 +931,9 @@ namespace xui
 		xui::drawcmd::circle_element & draw_circle( const xui::vec2 & center, float radius, const xui::border & border, const xui::filled filled );
 		xui::drawcmd::ellipse_element & draw_ellipse( const xui::vec2 & center, const xui::vec2 & radius, const xui::border & border, const xui::filled filled );
 		xui::drawcmd::polygon_element & draw_polygon( std::span<xui::vec2> points, const xui::border & border, const xui::filled filled );
+
+	private:
+		bool menu_item( int row, int col, xui::control_id parent, xui::item_model * model, xui::control_id & select_id );
 
 	private:
 		private_p * _p;
@@ -1505,5 +1509,21 @@ namespace xui
 	inline bool			operator!=( const xui::rect & lhs, const xui::rect & rhs )
 	{
 		return lhs.x != rhs.x || lhs.y != rhs.y || lhs.w != rhs.w || lhs.h != rhs.h;
+	}
+
+	inline std::ostream & operator<<( std::ostream & lhs, const xui::vec2 & rhs )
+	{
+		lhs << "{ " << rhs.x << ", " << rhs.y << " }";
+		return lhs;
+	}
+	inline std::ostream & operator<<( std::ostream & lhs, const xui::size & rhs )
+	{
+		lhs << "{ " << rhs.w << ", " << rhs.h << " }";
+		return lhs;
+	}
+	inline std::ostream & operator<<( std::ostream & lhs, const xui::rect & rhs )
+	{
+		lhs << "{ " << rhs.x << ", " << rhs.y << ", " << rhs.w << ", " << rhs.h << " }";
+		return lhs;
 	}
 }
