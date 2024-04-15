@@ -55,6 +55,24 @@ namespace xui
 	class listview_model;
 	class tableview_model;
 
+	inline constexpr std::size_t hash( const char * str, std::size_t size = std::numeric_limits<size_t>::max(), std::size_t value = 14695981039346656037ULL )
+	{
+		while ( *str++ != '\0' && size-- != 0 )
+		{
+			value ^= static_cast<std::size_t>( *str );
+			value *= 1099511628211ULL;
+		}
+
+		return value;
+	}
+	inline constexpr std::size_t hash( const std::string & str )
+	{
+		return hash( str.data(), str.size() );
+	}
+	inline constexpr std::size_t hash( std::string_view str )
+	{
+		return hash( str.data(), str.size() );
+	}
 	template<typename ... Ts> struct overload : Ts ... { using Ts::operator() ...; }; template<class... Ts> overload( Ts... ) -> overload<Ts...>;
 
 	enum event
@@ -179,6 +197,35 @@ namespace xui
 		ORIENT_LEFT,
 		ORIENT_RIGHT,
 		ORIENT_BOTTOM,
+	};
+	enum layout_wrap
+	{
+		LAYOUT_WRAP_NO_WRAP = 0,
+		LAYOUT_WRAP_WRAP,
+		LAYOUT_WRAP_WRAP_REVERSE
+	};
+	enum layout_align
+	{
+		LAYOUT_ALIGN_AUTO = 0,
+		LAYOUT_ALIGN_STRETCH,
+		LAYOUT_ALIGN_CENTER,
+		LAYOUT_ALIGN_START,
+		LAYOUT_ALIGN_END,
+		LAYOUT_ALIGN_SPACE_BETWEEN,
+		LAYOUT_ALIGN_SPACE_AROUND,
+		LAYOUT_ALIGN_SPACE_EVENLY
+	};
+	enum layout_position
+	{
+		LAYOUT_POSITION_RELATIVE = 0,
+		LAYOUT_POSITION_ABSOLUTE
+	};
+	enum layout_direction
+	{
+		LAYOUT_DIRECTION_ROW = xui::direction::LEFT_RIGHT,
+		LAYOUT_DIRECTION_ROW_REVERSE = xui::direction::RIGHT_LEFT,
+		LAYOUT_DIRECTION_COLUMN = xui::direction::TOP_BOTTOM,
+		LAYOUT_DIRECTION_COLUMN_REVERSE = xui::direction::BOTTOM_TOP,
 	};
 
 	enum font_flag
@@ -709,8 +756,8 @@ namespace xui
 		struct private_p;
 
 	public:
-		static constexpr const size_t popup_zvalue = 16384;
-		static constexpr const size_t window_zvalue = 65535;
+		static constexpr const size_t popup_z_level = 16384;
+		static constexpr const size_t window_z_level = 65535;
 
 	public:
 		context( std::pmr::memory_resource * res = std::pmr::get_default_resource() );
@@ -786,20 +833,20 @@ namespace xui
 		void pop_disable();
 		bool current_disable() const;
 
-		void push_zvalue( size_t val );
-		void pop_zvalue();
-		size_t current_zvalue() const;
+		void push_zlevel( size_t val );
+		void pop_zlevel();
+		size_t current_zlevel() const;
 
 		void push_viewport( const xui::rect & rect );
 		void pop_viewport();
 		xui::rect current_viewport() const;
 
 	public:
-		template<typename F> void draw_zvalue( size_t val, F && f )
+		template<typename F> void draw_zlevel( size_t val, F && f )
 		{
-			push_zvalue( val );
+			push_zlevel( val );
 			f();
-			pop_zvalue();
+			pop_zlevel();
 		}
 		template<typename F> void draw_disable( bool val, F && f )
 		{
@@ -869,11 +916,6 @@ namespace xui
 		std::span<xui::drawcmd> end();
 
 	public:
-		bool begin_window( std::string_view title, xui::texture_id icon_id, int flags = xui::window_flag::WINDOW_NONE );
-		bool begin_window( xui::control_id ctl_id, std::string_view title, xui::texture_id icon_id, int flags = xui::window_flag::WINDOW_NONE );
-		void end_window();
-
-	public:
 		bool image( xui::texture_id id );
 		bool image( xui::control_id ctl_id, xui::texture_id id );
 		bool label( std::string_view text );
@@ -894,6 +936,15 @@ namespace xui
 	public:
 		bool menu( xui::item_model * model, xui::control_id & select_id );
 		bool menubar( xui::item_model * model, xui::control_id & select_id );
+
+	public:
+		bool begin_window( std::string_view title, xui::texture_id icon_id, int flags = xui::window_flag::WINDOW_NONE );
+		bool begin_window( xui::control_id ctl_id, std::string_view title, xui::texture_id icon_id, int flags = xui::window_flag::WINDOW_NONE );
+		void end_window();
+
+	public:
+		bool begin_layout();
+		void end_layout();
 
 	public:
 		bool begin_combobox();
@@ -1029,9 +1080,6 @@ namespace xui
 		virtual value_t col_header_data( int col, int role ) { return {}; }
 		virtual void row_header_data( int row, int role, const value_t & val ) {}
 		virtual void col_header_data( int col, int role, const value_t & val ) {}
-
-	public:
-		virtual bool move_item( xui::control_id src, xui::control_id dst, int child ) { return false; }
 
 	public:
 		std::string control_id;
@@ -1269,7 +1317,6 @@ namespace xui
 			IS_SELECTED,
 		};
 
-	public:
 		struct item
 		{
 			bool selected = false;
@@ -1417,113 +1464,118 @@ namespace xui
 	};
 
 
-	inline xui::vec2	operator-( const xui::vec2 & lhs )
+	inline xui::vec2				operator-( const xui::vec2 & lhs )
 	{
 		return xui::vec2( -lhs.x, -lhs.y );
 	}
-	inline xui::vec2	operator+( const xui::vec2 & lhs, const float rhs )
+	inline xui::vec2				operator+( const xui::vec2 & lhs, const float rhs )
 	{
 		return xui::vec2( lhs.x + rhs, lhs.y + rhs );
 	}
-	inline xui::vec2	operator-( const xui::vec2 & lhs, const float rhs )
+	inline xui::vec2				operator-( const xui::vec2 & lhs, const float rhs )
 	{
 		return xui::vec2( lhs.x - rhs, lhs.y - rhs );
 	}
-	inline xui::vec2	operator*( const xui::vec2 & lhs, const float rhs )
+	inline xui::vec2				operator*( const xui::vec2 & lhs, const float rhs )
 	{
 		return xui::vec2( lhs.x * rhs, lhs.y * rhs );
 	}
-	inline xui::vec2	operator/( const xui::vec2 & lhs, const float rhs )
+	inline xui::vec2				operator/( const xui::vec2 & lhs, const float rhs )
 	{
 		return xui::vec2( lhs.x / rhs, lhs.y / rhs );
 	}
-	inline xui::vec2	operator+( const xui::vec2 & lhs, const xui::vec2 & rhs )
+	inline xui::vec2				operator+( const xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		return xui::vec2( lhs.x + rhs.x, lhs.y + rhs.y );
 	}
-	inline xui::vec2	operator-( const xui::vec2 & lhs, const xui::vec2 & rhs )
+	inline xui::vec2				operator-( const xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		return xui::vec2( lhs.x - rhs.x, lhs.y - rhs.y );
 	}
-	inline xui::vec2	operator*( const xui::vec2 & lhs, const xui::vec2 & rhs )
+	inline xui::vec2				operator*( const xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		return xui::vec2( lhs.x * rhs.x, lhs.y * rhs.y );
 	}
-	inline xui::vec2	operator/( const xui::vec2 & lhs, const xui::vec2 & rhs )
+	inline xui::vec2				operator/( const xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		return xui::vec2( lhs.x / rhs.x, lhs.y / rhs.y );
 	}
-	inline xui::vec2 &  operator+=( xui::vec2 & lhs, const float rhs )
+	inline xui::vec2 &				operator+=( xui::vec2 & lhs, const float rhs )
 	{
 		lhs.x += rhs; lhs.y += rhs; return lhs;
 	}
-	inline xui::vec2 &  operator-=( xui::vec2 & lhs, const float rhs )
+	inline xui::vec2 &				operator-=( xui::vec2 & lhs, const float rhs )
 	{
 		lhs.x -= rhs; lhs.y -= rhs; return lhs;
 	}
-	inline xui::vec2 &  operator*=( xui::vec2 & lhs, const float rhs )
+	inline xui::vec2 &				operator*=( xui::vec2 & lhs, const float rhs )
 	{
 		lhs.x *= rhs; lhs.y *= rhs; return lhs;
 	}
-	inline xui::vec2 &  operator/=( xui::vec2 & lhs, const float rhs )
+	inline xui::vec2 &				operator/=( xui::vec2 & lhs, const float rhs )
 	{
 		lhs.x /= rhs; lhs.y /= rhs; return lhs;
 	}
-	inline xui::vec2 &  operator+=( xui::vec2 & lhs, const xui::vec2 & rhs )
+	inline xui::vec2 &				operator+=( xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		lhs.x += rhs.x; lhs.y += rhs.y; return lhs;
 	}
-	inline xui::vec2 &  operator-=( xui::vec2 & lhs, const xui::vec2 & rhs )
+	inline xui::vec2 &				operator-=( xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		lhs.x -= rhs.x; lhs.y -= rhs.y; return lhs;
 	}
-	inline xui::vec2 &  operator*=( xui::vec2 & lhs, const xui::vec2 & rhs )
+	inline xui::vec2 &				operator*=( xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		lhs.x *= rhs.x; lhs.y *= rhs.y; return lhs;
 	}
-	inline xui::vec2 &  operator/=( xui::vec2 & lhs, const xui::vec2 & rhs )
+	inline xui::vec2 &				operator/=( xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		lhs.x /= rhs.x; lhs.y /= rhs.y; return lhs;
 	}
 
-	inline bool			operator==( const xui::vec2 & lhs, const xui::vec2 & rhs )
+	inline bool						operator==( const xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		return lhs.x == rhs.x && lhs.y == rhs.y;
 	}
-	inline bool			operator!=( const xui::vec2 & lhs, const xui::vec2 & rhs )
+	inline bool						operator!=( const xui::vec2 & lhs, const xui::vec2 & rhs )
 	{
 		return lhs.x != rhs.x || lhs.y != rhs.y;
 	}
-	inline bool			operator==( const xui::size & lhs, const xui::size & rhs )
+	inline bool						operator==( const xui::size & lhs, const xui::size & rhs )
 	{
 		return lhs.w == rhs.w && lhs.h == rhs.h;
 	}
-	inline bool			operator!=( const xui::size & lhs, const xui::size & rhs )
+	inline bool						operator!=( const xui::size & lhs, const xui::size & rhs )
 	{
 		return lhs.w != rhs.w || lhs.h != rhs.h;
 	}
-	inline bool			operator==( const xui::rect & lhs, const xui::rect & rhs )
+	inline bool						operator==( const xui::rect & lhs, const xui::rect & rhs )
 	{
 		return lhs.x == rhs.x && lhs.y == rhs.y && lhs.w == rhs.w && lhs.h == rhs.h;
 	}
-	inline bool			operator!=( const xui::rect & lhs, const xui::rect & rhs )
+	inline bool						operator!=( const xui::rect & lhs, const xui::rect & rhs )
 	{
 		return lhs.x != rhs.x || lhs.y != rhs.y || lhs.w != rhs.w || lhs.h != rhs.h;
 	}
 
-	inline std::ostream & operator<<( std::ostream & lhs, const xui::vec2 & rhs )
+	inline std::ostream &			operator<<( std::ostream & lhs, const xui::vec2 & rhs )
 	{
 		lhs << "{ " << rhs.x << ", " << rhs.y << " }";
 		return lhs;
 	}
-	inline std::ostream & operator<<( std::ostream & lhs, const xui::size & rhs )
+	inline std::ostream &			operator<<( std::ostream & lhs, const xui::size & rhs )
 	{
 		lhs << "{ " << rhs.w << ", " << rhs.h << " }";
 		return lhs;
 	}
-	inline std::ostream & operator<<( std::ostream & lhs, const xui::rect & rhs )
+	inline std::ostream &			operator<<( std::ostream & lhs, const xui::rect & rhs )
 	{
 		lhs << "{ " << rhs.x << ", " << rhs.y << ", " << rhs.w << ", " << rhs.h << " }";
 		return lhs;
+	}
+
+	inline constexpr std::size_t	operator"" _hash( const char * str, std::size_t size )
+	{
+		return xui::hash( str, size );
 	}
 }

@@ -529,7 +529,7 @@ xui::style::selector xui::style::parse_selector( std::string_view::iterator & be
             select.attrs.insert( { name, parse_attribute( beg, end ) } );
             name.clear();
         }
-        else if( *beg == ';' )
+        else if ( *beg == ';' )
         {
             ++beg;
             name.clear();
@@ -633,10 +633,10 @@ xui::color xui::style::parse_rgba( std::string_view::iterator & beg, std::string
 
     xui::color result;
 
-    result.r = parse_attribute( beg, end ).value<int>(); if (check<','>( beg, end ) ) ++beg;
-    result.g = parse_attribute( beg, end ).value<int>(); if (check<','>( beg, end ) ) ++beg;
-    result.b = parse_attribute( beg, end ).value<int>(); if (check<','>( beg, end ) ) ++beg;
-    result.a = parse_attribute( beg, end ).value<int>(); if (check<')'>( beg, end ) ) ++beg;
+    result.r = parse_attribute( beg, end ).value<int>(); if ( check<','>( beg, end ) ) ++beg;
+    result.g = parse_attribute( beg, end ).value<int>(); if ( check<','>( beg, end ) ) ++beg;
+    result.b = parse_attribute( beg, end ).value<int>(); if ( check<','>( beg, end ) ) ++beg;
+    result.a = parse_attribute( beg, end ).value<int>(); if ( check<')'>( beg, end ) ) ++beg;
 
     return result;
 }
@@ -1074,7 +1074,7 @@ public:
         : _res( res )
         , _commands( res )
         , _disables( res )
-        , _zvalues( res )
+        , _zlevels( res )
         , _types( res )
         , _fonts( res )
         , _ctl_ids( res )
@@ -1099,7 +1099,7 @@ public:
     size_t _zvalue = 0;
     size_t _ctl_id_idx = 0;
     std::pmr::deque<bool> _disables;
-    std::pmr::deque<size_t> _zvalues;
+    std::pmr::deque<size_t> _zlevels;
     std::pmr::deque<style_type> _types;
     std::pmr::deque<xui::font_id> _fonts;
     std::pmr::deque<std::string> _ctl_ids;
@@ -1128,7 +1128,7 @@ xui::context::~context()
 std::string_view xui::context::dark_style()
 {
     return
-R"(
+        R"(
     *{
         font-color: white;
         text-align: center;
@@ -1491,22 +1491,22 @@ bool xui::context::current_disable() const
     return _p->_disables.back();
 }
 
-void xui::context::push_zvalue( size_t val )
+void xui::context::push_zlevel( size_t val )
 {
-    _p->_zvalues.push_back( val );
+    _p->_zlevels.push_back( val );
 }
 
-void xui::context::pop_zvalue()
+void xui::context::pop_zlevel()
 {
-    _p->_zvalues.pop_back();
+    _p->_zlevels.pop_back();
 }
 
-size_t xui::context::current_zvalue() const
+size_t xui::context::current_zlevel() const
 {
-    if ( _p->_zvalues.empty() )
+    if ( _p->_zlevels.empty() )
         return 0;
 
-    return _p->_zvalues.back();
+    return _p->_zlevels.back();
 }
 
 void xui::context::push_viewport( const xui::rect & rect )
@@ -1688,7 +1688,7 @@ std::span<xui::drawcmd> xui::context::end()
     _p->_styles.clear();
     _p->_ctl_ids.clear();
     _p->_windows.clear();
-    _p->_zvalues.clear();
+    _p->_zlevels.clear();
     _p->_textures.clear();
     _p->_disables.clear();
     _p->_viewports.clear();
@@ -1722,193 +1722,187 @@ bool xui::context::begin_window( xui::control_id ctl_id, std::string_view title,
         {
             if ( ( flags & xui::window_flag::WINDOW_NO_BACKGROUND ) == 0 )
             {
-                draw_zvalue( _p->_zvalue++, [&]()
+                draw_style_type( "window", [&]()
                 {
-                    draw_style_type( "window", [&]()
-                    {
-                        draw_rect( wrect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-                    } );
+                    draw_rect( wrect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
                 } );
             }
 
-            draw_zvalue( window_zvalue + _p->_zvalue++, [&]()
+            draw_zlevel( window_z_level, [&]()
             {
-                draw_zvalue( _p->_zvalue++, [&]()
+                draw_style_type( "window", [&]()
                 {
-                    draw_style_type( "window", [&]()
+                    xui::rect title_rect = { 0, 0, wrect.w, XUI_SCALE( 30 ) };
+                    xui::rect move_rect = { 0, 0, wrect.w - XUI_SCALE( 150 ), XUI_SCALE( 30 ) };
+                    xui::rect resize_rect = { wrect.x + ( wrect.w - XUI_SCALE( 15 ) ), wrect.y + ( wrect.h - XUI_SCALE( 15 ) ), XUI_SCALE( 15 ), XUI_SCALE( 15 ) };
+
+                    auto dt = _p->_impl->get_cursor_dt( wid );
+                    auto wr = _p->_impl->get_window_rect( wid );
+
+                    if ( ( flags & xui::window_flag::WINDOW_NO_MOVE ) == 0 )
                     {
-                        xui::rect title_rect = { 0, 0, wrect.w, 30 };
-                        xui::rect move_rect = { 0, 0, wrect.w - 150, 30 };
-                        xui::rect resize_rect = { wrect.x + ( wrect.w - 15 ), wrect.y + ( wrect.h - 15 ), 15, 15 };
-
-                        auto dt = _p->_impl->get_cursor_dt( wid );
-                        auto wr = _p->_impl->get_window_rect( wid );
-
-                        if ( ( flags & xui::window_flag::WINDOW_NO_MOVE ) == 0 )
+                        draw_control_id( std::format( "{}_{}", current_control_id(), "move" ), [&]()
                         {
-                            draw_control_id( std::format( "{}_{}", current_control_id(), "move" ), [&]()
+                            draw_viewport( move_rect, [&]()
                             {
-                                draw_viewport( move_rect, [&]()
+                                if ( current_event_status() == xui::event_status::ACTIVE )
+                                {
+                                    _p->_impl->set_window_rect( wid, { wr.x + dt.x, wr.y + dt.y, wr.w, wr.h } );
+                                }
+                            } );
+                        } );
+                    }
+                    if ( ( flags & xui::window_flag::WINDOW_NO_RESIZE ) == 0 )
+                    {
+                        draw_style_element( "resize", [&]()
+                        {
+                            draw_control_id( std::format( "{}_{}", current_control_id(), "resize" ), [&]()
+                            {
+                                draw_viewport( resize_rect, [&]()
                                 {
                                     if ( current_event_status() == xui::event_status::ACTIVE )
                                     {
-                                        _p->_impl->set_window_rect( wid, { wr.x + dt.x, wr.y + dt.y, wr.w, wr.h } );
+                                        _p->_impl->set_window_rect( wid, { wr.x, wr.y, std::max( wr.w + dt.x, XUI_SCALE( 150 ) ), std::max( wr.h + dt.y, title_rect.h + resize_rect.h ) } );
                                     }
                                 } );
                             } );
-                        }
-                        if ( ( flags & xui::window_flag::WINDOW_NO_RESIZE ) == 0 )
-                        {
-                            draw_style_element( "resize", [&]()
-                            {
-                                draw_control_id( std::format( "{}_{}", current_control_id(), "resize" ), [&]()
-                                {
-                                    draw_viewport( resize_rect, [&]()
-                                    {
-                                        if ( current_event_status() == xui::event_status::ACTIVE )
-                                        {
-                                            _p->_impl->set_window_rect( wid, { wr.x, wr.y, std::max( wr.w + dt.x, 150.0f ), std::max( wr.h + dt.y, title_rect.h + resize_rect.h ) } );
-                                        }
-                                    } );
-                                } );
 
-                                draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
-                                    .moveto( { resize_rect.x, resize_rect.y + resize_rect.h } )
-                                    .lineto( { resize_rect.x + resize_rect.w, resize_rect.y + resize_rect.h } )
-                                    .lineto( { resize_rect.x + resize_rect.w, resize_rect.y } )
-                                    .lineto( { resize_rect.x, resize_rect.y + resize_rect.h } )
-                                    .closepath();
+                            draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                                .moveto( { resize_rect.x, resize_rect.y + resize_rect.h } )
+                                .lineto( { resize_rect.x + resize_rect.w, resize_rect.y + resize_rect.h } )
+                                .lineto( { resize_rect.x + resize_rect.w, resize_rect.y } )
+                                .lineto( { resize_rect.x, resize_rect.y + resize_rect.h } )
+                                .closepath();
+                        } );
+                    }
+                    if ( ( flags & xui::window_flag::WINDOW_NO_TITLEBAR ) == 0 )
+                    {
+                        draw_style_element( "titlebar", [&]()
+                        {
+                            wrect.y += XUI_SCALE( 30 );
+                            wrect.h -= XUI_SCALE( 30 );
+
+                            draw_rect( title_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+
+                            draw_image( icon_id, { XUI_SCALE( 8 ), XUI_SCALE( 5 ), XUI_SCALE( 20 ), XUI_SCALE( 20 ) } );
+
+                            draw_style_element( "title", [&]()
+                            {
+                                draw_text( title, current_font_id(), { XUI_SCALE( 30 ), XUI_SCALE( 5 ), wrect.w - XUI_SCALE( 150 ), XUI_SCALE( 20 ) }, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
                             } );
-                        }
-                        if ( ( flags & xui::window_flag::WINDOW_NO_TITLEBAR ) == 0 )
-                        {
-                            draw_style_element( "titlebar", [&]()
+
+                            xui::rect box_rect = { title_rect.w, title_rect.y, XUI_SCALE( 50 ), title_rect.h };
+
+                            draw_control_id( std::format( "{}_{}", current_control_id(), "closebox" ), [&]()
                             {
-                                wrect.y += 30;
-                                wrect.h -= 30;
-
-                                draw_rect( title_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-
-                                draw_image( icon_id, { 8, 5, 20, 20 } );
-
-                                draw_style_element( "title", [&]()
+                                draw_style_element( "closebox", [&]()
                                 {
-                                    draw_text( title, current_font_id(), { 30, 5, wrect.w - 150, 20 }, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
-                                } );
+                                    box_rect.x -= XUI_SCALE( 50 );
 
-                                xui::rect box_rect = { title_rect.w, title_rect.y, 50, title_rect.h };
-
-                                draw_control_id( std::format( "{}_{}", current_control_id(), "closebox" ), [&]()
-                                {
-                                    draw_style_element( "closebox", [&]()
+                                    draw_disable( ( flags & xui::window_flag::WINDOW_NO_CLOSEBOX ) != 0, [&]()
                                     {
-                                        box_rect.x -= 50;
-
-                                        draw_disable( ( flags & xui::window_flag::WINDOW_NO_CLOSEBOX ) != 0, [&]()
+                                        draw_viewport( box_rect, [&]()
                                         {
-                                            draw_viewport( box_rect, [&]()
+                                            xui::event_status status = current_event_status();
+                                            draw_style_status( status, [&]()
                                             {
-                                                xui::event_status status = current_event_status();
-                                                draw_style_status( status, [&]()
-                                                {
-                                                    draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                                                draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
-                                                    draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
-                                                        .moveto( { box_rect.center().x - 5, box_rect.center().y - 5 } )
-                                                        .lineto( { box_rect.center().x + 5, box_rect.center().y + 5 } )
-                                                        .closepath()
-                                                        .moveto( { box_rect.center().x + 5, box_rect.center().y - 5 } )
-                                                        .lineto( { box_rect.center().x - 5, box_rect.center().y + 5 } )
-                                                        .closepath();
-                                                } );
-
-                                                if ( status == xui::event_status::ACTIVE ) _p->_impl->remove_window( wid );
+                                                draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                                                    .moveto( { box_rect.center().x - XUI_SCALE( 5 ), box_rect.center().y - XUI_SCALE( 5 ) } )
+                                                    .lineto( { box_rect.center().x + XUI_SCALE( 5 ), box_rect.center().y + XUI_SCALE( 5 ) } )
+                                                    .closepath()
+                                                    .moveto( { box_rect.center().x + XUI_SCALE( 5 ), box_rect.center().y - XUI_SCALE( 5 ) } )
+                                                    .lineto( { box_rect.center().x - XUI_SCALE( 5 ), box_rect.center().y + XUI_SCALE( 5 ) } )
+                                                    .closepath();
                                             } );
+
+                                            if ( status == xui::event_status::ACTIVE ) _p->_impl->remove_window( wid );
                                         } );
                                     } );
                                 } );
+                            } );
 
-                                draw_control_id( std::format( "{}_{}", current_control_id(), "maximizebox" ), [&]()
+                            draw_control_id( std::format( "{}_{}", current_control_id(), "maximizebox" ), [&]()
+                            {
+                                draw_style_element( "maximizebox", [&]()
                                 {
-                                    draw_style_element( "maximizebox", [&]()
+                                    box_rect.x -= XUI_SCALE( 50 );
+
+                                    draw_disable( ( flags & xui::window_flag::WINDOW_NO_MAXIMIZEBOX ) != 0, [&]()
                                     {
-                                        box_rect.x -= 49;
-
-                                        draw_disable( ( flags & xui::window_flag::WINDOW_NO_MAXIMIZEBOX ) != 0, [&]()
+                                        draw_viewport( box_rect, [&]()
                                         {
-                                            draw_viewport( box_rect, [&]()
+                                            xui::event_status status = current_event_status( false, xui::event::KEY_MOUSE_LEFT_CLICK );
+                                            draw_style_status( status, [&]()
                                             {
-                                                xui::event_status status = current_event_status( false, xui::event::KEY_MOUSE_LEFT_CLICK );
-                                                draw_style_status( status, [&]()
-                                                {
-                                                    draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                                                draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
-                                                    if ( ( window_status & xui::window_status::WINDOW_MAXIMIZE ) != 0 )
-                                                    {
-                                                        draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
-                                                            .moveto( { box_rect.center().x - 3, box_rect.center().y - 5 } )
-                                                            .lineto( { box_rect.center().x - 3, box_rect.center().y + 3 } )
-                                                            .lineto( { box_rect.center().x + 5, box_rect.center().y + 3 } )
-                                                            .lineto( { box_rect.center().x + 5, box_rect.center().y - 5 } )
-                                                            .lineto( { box_rect.center().x - 3, box_rect.center().y - 5 } )
-                                                            .closepath()
-                                                            .moveto( { box_rect.center().x - 5, box_rect.center().y - 3 } )
-                                                            .lineto( { box_rect.center().x - 5, box_rect.center().y + 5 } )
-                                                            .lineto( { box_rect.center().x + 3, box_rect.center().y + 5 } )
-                                                            .lineto( { box_rect.center().x + 3, box_rect.center().y - 3 } )
-                                                            .lineto( { box_rect.center().x - 5, box_rect.center().y - 3 } )
-                                                            .closepath();
-                                                    }
-                                                    else
-                                                    {
-                                                        draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
-                                                            .moveto( { box_rect.center().x - 5, box_rect.center().y - 5 } )
-                                                            .lineto( { box_rect.center().x - 5, box_rect.center().y + 5 } )
-                                                            .lineto( { box_rect.center().x + 5, box_rect.center().y + 5 } )
-                                                            .lineto( { box_rect.center().x + 5, box_rect.center().y - 5 } )
-                                                            .lineto( { box_rect.center().x - 5, box_rect.center().y - 5 } )
-                                                            .closepath();
-                                                    }
-                                                } );
-
-                                                if ( status == xui::event_status::ACTIVE )
+                                                if ( ( window_status & xui::window_status::WINDOW_MAXIMIZE ) != 0 )
                                                 {
-                                                    _p->_impl->set_window_status( wid, ( ( window_status & xui::window_status::WINDOW_MAXIMIZE ) != 0 ) ? xui::window_status::WINDOW_RESTORE : xui::window_status::WINDOW_MAXIMIZE );
+                                                    draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                                                        .moveto( { box_rect.center().x - XUI_SCALE( 3 ), box_rect.center().y - XUI_SCALE( 5 ) } )
+                                                        .lineto( { box_rect.center().x - XUI_SCALE( 3 ), box_rect.center().y + XUI_SCALE( 3 ) } )
+                                                        .lineto( { box_rect.center().x + XUI_SCALE( 5 ), box_rect.center().y + XUI_SCALE( 3 ) } )
+                                                        .lineto( { box_rect.center().x + XUI_SCALE( 5 ), box_rect.center().y - XUI_SCALE( 5 ) } )
+                                                        .lineto( { box_rect.center().x - XUI_SCALE( 3 ), box_rect.center().y - XUI_SCALE( 5 ) } )
+                                                        .closepath()
+                                                        .moveto( { box_rect.center().x - XUI_SCALE( 5 ), box_rect.center().y - XUI_SCALE( 3 ) } )
+                                                        .lineto( { box_rect.center().x - XUI_SCALE( 5 ), box_rect.center().y + XUI_SCALE( 5 ) } )
+                                                        .lineto( { box_rect.center().x + XUI_SCALE( 3 ), box_rect.center().y + XUI_SCALE( 5 ) } )
+                                                        .lineto( { box_rect.center().x + XUI_SCALE( 3 ), box_rect.center().y - XUI_SCALE( 3 ) } )
+                                                        .lineto( { box_rect.center().x - XUI_SCALE( 5 ), box_rect.center().y - XUI_SCALE( 3 ) } )
+                                                        .closepath();
+                                                }
+                                                else
+                                                {
+                                                    draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                                                        .moveto( { box_rect.center().x - XUI_SCALE( 5 ), box_rect.center().y - XUI_SCALE( 5 ) } )
+                                                        .lineto( { box_rect.center().x - XUI_SCALE( 5 ), box_rect.center().y + XUI_SCALE( 5 ) } )
+                                                        .lineto( { box_rect.center().x + XUI_SCALE( 5 ), box_rect.center().y + XUI_SCALE( 5 ) } )
+                                                        .lineto( { box_rect.center().x + XUI_SCALE( 5 ), box_rect.center().y - XUI_SCALE( 5 ) } )
+                                                        .lineto( { box_rect.center().x - XUI_SCALE( 5 ), box_rect.center().y - XUI_SCALE( 5 ) } )
+                                                        .closepath();
                                                 }
                                             } );
-                                        } );
-                                    } );
-                                } );
 
-                                draw_control_id( std::format( "{}_{}", current_control_id(), "minimizebox" ), [&]()
-                                {
-                                    draw_style_element( "minimizebox", [&]()
-                                    {
-                                        box_rect.x -= 48;
-
-                                        draw_disable( ( flags & xui::window_flag::WINDOW_NO_MINIMIZEBOX ) != 0, [&]()
-                                        {
-                                            draw_viewport( box_rect, [&]()
+                                            if ( status == xui::event_status::ACTIVE )
                                             {
-                                                xui::event_status status = current_event_status();
-                                                draw_style_status( status, [&]()
-                                                {
-                                                    draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-
-                                                    draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
-                                                        .moveto( { box_rect.center().x - 5, box_rect.center().y } )
-                                                        .lineto( { box_rect.center().x + 5, box_rect.center().y } )
-                                                        .closepath();
-                                                } );
-
-                                                if ( status == xui::event_status::ACTIVE ) _p->_impl->set_window_status( wid, xui::window_status::WINDOW_MINIMIZE );
-                                            } );
+                                                _p->_impl->set_window_status( wid, ( ( window_status & xui::window_status::WINDOW_MAXIMIZE ) != 0 ) ? xui::window_status::WINDOW_RESTORE : xui::window_status::WINDOW_MAXIMIZE );
+                                            }
                                         } );
                                     } );
                                 } );
                             } );
-                        }
-                    } );
+
+                            draw_control_id( std::format( "{}_{}", current_control_id(), "minimizebox" ), [&]()
+                            {
+                                draw_style_element( "minimizebox", [&]()
+                                {
+                                    box_rect.x -= XUI_SCALE( 50 );
+
+                                    draw_disable( ( flags & xui::window_flag::WINDOW_NO_MINIMIZEBOX ) != 0, [&]()
+                                    {
+                                        draw_viewport( box_rect, [&]()
+                                        {
+                                            xui::event_status status = current_event_status();
+                                            draw_style_status( status, [&]()
+                                            {
+                                                draw_rect( box_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+
+                                                draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                                                    .moveto( { box_rect.center().x - XUI_SCALE( 5 ), box_rect.center().y } )
+                                                    .lineto( { box_rect.center().x + XUI_SCALE( 5 ), box_rect.center().y } )
+                                                    .closepath();
+                                            } );
+
+                                            if ( status == xui::event_status::ACTIVE ) _p->_impl->set_window_status( wid, xui::window_status::WINDOW_MINIMIZE );
+                                        } );
+                                    } );
+                                } );
+                            } );
+                        } );
+                    }
                 } );
             } );
 
@@ -1943,14 +1937,11 @@ bool xui::context::image( xui::texture_id id )
 
 bool xui::context::image( xui::control_id ctl_id, xui::texture_id id )
 {
-    draw_zvalue( _p->_zvalue++, [&]()
+    draw_style_type( "image", [&]()
     {
-        draw_style_type( "image", [&]()
+        draw_control_id( ctl_id, [&]()
         {
-            draw_control_id( ctl_id, [&]()
-            {
-                draw_image( id, current_viewport() );
-            } );
+            draw_image( id, current_viewport() );
         } );
     } );
 
@@ -1964,14 +1955,11 @@ bool xui::context::label( std::string_view text )
 
 bool xui::context::label( xui::control_id ctl_id, std::string_view text )
 {
-    draw_zvalue( _p->_zvalue++, [&]()
+    draw_style_type( "label", [&]()
     {
-        draw_style_type( "label", [&]()
+        draw_control_id( ctl_id, [&]()
         {
-            draw_control_id( ctl_id, [&]()
-            {
-                draw_text( text, current_font_id(), current_viewport(), current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
-            } );
+            draw_text( text, current_font_id(), current_viewport(), current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
         } );
     } );
 
@@ -1985,36 +1973,33 @@ bool xui::context::radio( bool & checked )
 
 bool xui::context::radio( xui::control_id ctl_id, bool & checked )
 {
-    draw_zvalue( _p->_zvalue++, [&]()
+    draw_style_type( "radio", [&]()
     {
-        draw_style_type( "radio", [&]()
+        draw_control_id( ctl_id, [&]()
         {
-            draw_control_id( ctl_id, [&]()
+            auto id = current_window_id();
+            auto rect = current_viewport();
+            float raduis = std::min( rect.w, rect.h ) / 2;
+
+            xui::event_status status = current_event_status( false, xui::event::KEY_MOUSE_LEFT_CLICK );
+            if ( status == xui::event_status::ACTIVE )
+                checked = !checked;
+
+            draw_style_status( status, [&]()
             {
-                auto id = current_window_id();
-                auto rect = current_viewport();
-                float raduis = std::min( rect.w, rect.h ) / 2;
-
-                xui::event_status status = current_event_status( false, xui::event::KEY_MOUSE_LEFT_CLICK );
-                if ( status == xui::event_status::ACTIVE )
-                    checked = !checked;
-
-                draw_style_status( status, [&]()
-                {
-                    draw_circle( { rect.x + raduis, rect.y + raduis }, raduis, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-                } );
-
-                if ( checked )
-                {
-                    draw_style_element( "indicator", [&]()
-                    {
-                        draw_style_status( status, [&]()
-                        {
-                            draw_circle( { rect.x + raduis, rect.y + raduis }, ( raduis * 0.7f ), current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-                        } );
-                    } );
-                }
+                draw_circle( { rect.x + raduis, rect.y + raduis }, raduis, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
             } );
+
+            if ( checked )
+            {
+                draw_style_element( "indicator", [&]()
+                {
+                    draw_style_status( status, [&]()
+                    {
+                        draw_circle( { rect.x + raduis, rect.y + raduis }, ( raduis * 0.7f ), current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                    } );
+                } );
+            }
         } );
     } );
 
@@ -2028,39 +2013,36 @@ bool xui::context::check( bool & checked )
 
 bool xui::context::check( xui::control_id ctl_id, bool & checked )
 {
-    draw_zvalue( _p->_zvalue++, [&]()
+    draw_style_type( "check", [&]()
     {
-        draw_style_type( "check", [&]()
+        draw_control_id( ctl_id, [&]()
         {
-            draw_control_id( ctl_id, [&]()
+            auto id = current_window_id();
+            auto rect = current_viewport();
+            rect.w = std::min( rect.w, rect.h );
+            rect.h = rect.w;
+
+            xui::event_status status = current_event_status( false, xui::event::KEY_MOUSE_LEFT_CLICK );
+            if ( status == xui::event_status::ACTIVE ) checked = !checked;
+
+            draw_style_status( status, [&]()
             {
-                auto id = current_window_id();
-                auto rect = current_viewport();
-                rect.w = std::min( rect.w, rect.h );
-                rect.h = rect.w;
-
-                xui::event_status status = current_event_status( false, xui::event::KEY_MOUSE_LEFT_CLICK );
-                if ( status == xui::event_status::ACTIVE ) checked = !checked;
-
-                draw_style_status( status, [&]()
-                {
-                    draw_rect( rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-                } );
-
-                if ( checked )
-                {
-                    draw_style_element( "indicator", [&]()
-                    {
-                        draw_style_status( status, [&]()
-                        {
-                            draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
-                                .moveto( { rect.x + ( rect.w * 0.2f ), rect.y + ( rect.h * 0.5f ) } )
-                                .lineto( { rect.x + ( rect.w * 0.4f ), rect.y + ( rect.h * 0.7f ) } )
-                                .lineto( { rect.x + ( rect.w * 0.8f ), rect.y + ( rect.h * 0.2f ) } );
-                        } );
-                    } );
-                }
+                draw_rect( rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
             } );
+
+            if ( checked )
+            {
+                draw_style_element( "indicator", [&]()
+                {
+                    draw_style_status( status, [&]()
+                    {
+                        draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                            .moveto( { rect.x + ( rect.w * 0.2f ), rect.y + ( rect.h * 0.5f ) } )
+                            .lineto( { rect.x + ( rect.w * 0.4f ), rect.y + ( rect.h * 0.7f ) } )
+                            .lineto( { rect.x + ( rect.w * 0.8f ), rect.y + ( rect.h * 0.2f ) } );
+                    } );
+                } );
+            }
         } );
     } );
 
@@ -2076,33 +2058,30 @@ bool xui::context::button( xui::control_id ctl_id, std::string_view text )
 {
     xui::event_status status;
 
-    draw_zvalue( _p->_zvalue++, [&]()
+    draw_style_type( "button", [&]()
     {
-        draw_style_type( "button", [&]()
+        draw_control_id( ctl_id, [&]()
         {
-            draw_control_id( ctl_id, [&]()
+            auto id = current_window_id();
+            auto rect = current_viewport();
+
+            status = current_event_status( false, xui::event::KEY_MOUSE_LEFT_CLICK );
+
+            draw_style_status( status, [&]()
             {
-                auto id = current_window_id();
-                auto rect = current_viewport();
-
-                status = current_event_status( false, xui::event::KEY_MOUSE_LEFT_CLICK );
-
-                draw_style_status( status, [&]()
-                {
-                    draw_rect( rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-                } );
-
-                if ( !text.empty() )
-                {
-                    draw_style_element( "text", [&]()
-                    {
-                        draw_style_status( status, [&]()
-                        {
-                            draw_text( text, current_font_id(), rect, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
-                        } );
-                    } );
-                }
+                draw_rect( rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
             } );
+
+            if ( !text.empty() )
+            {
+                draw_style_element( "text", [&]()
+                {
+                    draw_style_status( status, [&]()
+                    {
+                        draw_text( text, current_font_id(), rect, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
+                    } );
+                } );
+            }
         } );
     } );
 
@@ -2116,113 +2095,110 @@ float xui::context::slider( float & value, float min, float max )
 
 float xui::context::slider( xui::control_id ctl_id, float & value, float min, float max )
 {
-    draw_zvalue( _p->_zvalue++, [&]()
+    draw_style_type( "slider", [&]()
     {
-        draw_style_type( "slider", [&]()
+        draw_control_id( ctl_id, [&]()
         {
-            draw_control_id( ctl_id, [&]()
+            auto id = current_window_id();
+            auto back_rect = current_viewport();
+            xui::vec2 pos = _p->_impl->get_cursor_pos( id );
+            xui::event_status status = current_event_status();
+
+            draw_style_status( status, [&]()
             {
-                auto id = current_window_id();
-                auto back_rect = current_viewport();
-                xui::vec2 pos = _p->_impl->get_cursor_pos( id );
-                xui::event_status status = current_event_status();
+                draw_rect( back_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+            } );
+
+            draw_style_element( "cursor", [&]()
+            {
+                float cursor_w = 0;
+                float cursor_h = 0;
+                float cursor_step = 0;
+                xui::rect cursor_rect = {};
+                float backleft = back_rect.x;
+                float backright = back_rect.x + back_rect.w;
+                float backtop = back_rect.y;
+                float backbottom = back_rect.y + back_rect.h;
+
+                switch ( current_style( "direction" ).value<xui::direction>( xui::direction::LEFT_RIGHT ) )
+                {
+                case xui::direction::LEFT_RIGHT:
+                {
+                    backleft += XUI_SCALE( 5 );
+                    backright -= XUI_SCALE( 5 );
+                    cursor_w = XUI_SCALE( 10.0f );
+                    cursor_h = backbottom - backtop;
+                    cursor_step = ( backright - backleft ) / ( max - min );
+                    if ( status == xui::event_status::ACTIVE )
+                        value = std::clamp( ( ( pos.x - backleft ) / ( backright - backleft ) ) * ( max - min ), min, max );
+
+                    cursor_rect = {
+                        back_rect.x + ( cursor_step * value ),
+                        back_rect.y,
+                        cursor_w,
+                        cursor_h
+                    };
+                    break;
+                }
+                case xui::direction::RIGHT_LEFT:
+                {
+                    backleft += XUI_SCALE( 5 );
+                    backright -= XUI_SCALE( 5 );
+                    cursor_w = XUI_SCALE( 10.0f );
+                    cursor_h = backbottom - backtop;
+                    cursor_step = ( backright - backleft ) / ( max - min );
+                    if ( status == xui::event_status::ACTIVE )
+                        value = std::clamp( ( ( backright - pos.x ) / ( backright - backleft ) ) * ( max - min ), min, max );
+
+                    cursor_rect = {
+                        ( back_rect.x + back_rect.w - cursor_w ) - ( cursor_step * value ),
+                        back_rect.y,
+                        cursor_w,
+                        cursor_h
+                    };
+                    break;
+                }
+                case xui::direction::TOP_BOTTOM:
+                {
+                    backtop += XUI_SCALE( 5 );
+                    backbottom -= XUI_SCALE( 5 );
+                    cursor_w = backright - backleft;
+                    cursor_h = XUI_SCALE( 10.0f );
+                    cursor_step = ( backbottom - backtop ) / ( max - min );
+                    if ( status == xui::event_status::ACTIVE )
+                        value = std::clamp( ( ( pos.y - backtop ) / ( backbottom - backtop ) ) * ( max - min ), min, max );
+
+                    cursor_rect = {
+                        back_rect.x,
+                        back_rect.y + ( cursor_step * value ),
+                        cursor_w,
+                        cursor_h
+                    };
+                    break;
+                }
+                case xui::direction::BOTTOM_TOP:
+                {
+                    backtop += XUI_SCALE( 5 );
+                    backbottom -= XUI_SCALE( 5 );
+                    cursor_w = backright - backleft;
+                    cursor_h = XUI_SCALE( 10.0f );
+                    cursor_step = ( backbottom - backtop ) / ( max - min );
+                    if ( status == xui::event_status::ACTIVE )
+                        value = std::clamp( ( ( backbottom - pos.y ) / ( backbottom - backtop ) ) * ( max - min ), min, max );
+
+                    cursor_rect = {
+                        back_rect.x,
+                        ( back_rect.y + back_rect.h - cursor_h ) - ( cursor_step * value ),
+                        cursor_w,
+                        cursor_h
+                    };
+                    break;
+                }
+                }
 
                 draw_style_status( status, [&]()
                 {
-                    draw_rect( back_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-                } );
-
-                draw_style_element( "cursor", [&]()
-                {
-                    float cursor_w = 0;
-                    float cursor_h = 0;
-                    float cursor_step = 0;
-                    xui::rect cursor_rect = {};
-                    float backleft = back_rect.x;
-                    float backright = back_rect.x + back_rect.w;
-                    float backtop = back_rect.y;
-                    float backbottom = back_rect.y + back_rect.h;
-
-                    switch ( current_style( "direction" ).value<xui::direction>( xui::direction::LEFT_RIGHT ) )
-                    {
-                    case xui::direction::LEFT_RIGHT:
-                    {
-                        backleft += 5;
-                        backright -= 5;
-                        cursor_w = 10.0f;
-                        cursor_h = backbottom - backtop;
-                        cursor_step = ( backright - backleft ) / ( max - min );
-                        if ( status == xui::event_status::ACTIVE )
-                            value = std::clamp( ( ( pos.x - backleft ) / ( backright - backleft ) ) * ( max - min ), min, max );
-
-                        cursor_rect = {
-                            back_rect.x + ( cursor_step * value ),
-                            back_rect.y,
-                            cursor_w,
-                            cursor_h
-                        };
-                        break;
-                    }
-                    case xui::direction::RIGHT_LEFT:
-                    {
-                        backleft += 5;
-                        backright -= 5;
-                        cursor_w = 10.0f;
-                        cursor_h = backbottom - backtop;
-                        cursor_step = ( backright - backleft ) / ( max - min );
-                        if ( status == xui::event_status::ACTIVE )
-                            value = std::clamp( ( ( backright - pos.x ) / ( backright - backleft ) ) * ( max - min ), min, max );
-
-                        cursor_rect = {
-                            ( back_rect.x + back_rect.w - cursor_w ) - ( cursor_step * value ),
-                            back_rect.y,
-                            cursor_w,
-                            cursor_h
-                        };
-                        break;
-                    }
-                    case xui::direction::TOP_BOTTOM:
-                    {
-                        backtop += 5;
-                        backbottom -= 5;
-                        cursor_w = backright - backleft;
-                        cursor_h = 10.0f;
-                        cursor_step = ( backbottom - backtop ) / ( max - min );
-                        if ( status == xui::event_status::ACTIVE )
-                            value = std::clamp( ( ( pos.y - backtop ) / ( backbottom - backtop ) ) * ( max - min ), min, max );
-
-                        cursor_rect = {
-                            back_rect.x,
-                            back_rect.y + ( cursor_step * value ),
-                            cursor_w,
-                            cursor_h
-                        };
-                        break;
-                    }
-                    case xui::direction::BOTTOM_TOP:
-                    {
-                        backtop += 5;
-                        backbottom -= 5;
-                        cursor_w = backright - backleft;
-                        cursor_h = 10.0f;
-                        cursor_step = ( backbottom - backtop ) / ( max - min );
-                        if ( status == xui::event_status::ACTIVE )
-                            value = std::clamp( ( ( backbottom - pos.y ) / ( backbottom - backtop ) ) * ( max - min ), min, max );
-
-                        cursor_rect = {
-                            back_rect.x,
-                            ( back_rect.y + back_rect.h - cursor_h ) - ( cursor_step * value ),
-                            cursor_w,
-                            cursor_h
-                        };
-                        break;
-                    }
-                    }
-
-                    draw_style_status( status, [&]()
-                    {
-                        draw_rect( cursor_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-                    } );
+                    draw_rect( cursor_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
                 } );
             } );
         } );
@@ -2238,50 +2214,47 @@ bool xui::context::process( float value, float min, float max, std::string_view 
 
 bool xui::context::process( xui::control_id ctl_id, float value, float min, float max, std::string_view text )
 {
-    draw_zvalue( _p->_zvalue++, [&]()
+    draw_style_type( "process", [&]()
     {
-        draw_style_type( "process", [&]()
+        draw_control_id( ctl_id, [&]()
         {
-            draw_control_id( ctl_id, [&]()
+            auto back_rect = current_viewport();
+
+            draw_rect( back_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+
+            draw_style_element( "cursor", [&]()
             {
-                auto back_rect = current_viewport();
+                xui::rect cursor_rect;
+                value = ( value - min ) / ( max - min );
 
-                draw_rect( back_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-
-                draw_style_element( "cursor", [&]()
+                switch ( current_style( "direction" ).value<xui::direction>( xui::direction::LEFT_RIGHT ) )
                 {
-                    xui::rect cursor_rect;
-                    value = ( value - min ) / ( max - min );
-
-                    switch ( current_style( "direction" ).value<xui::direction>( xui::direction::LEFT_RIGHT ) )
-                    {
-                    case xui::direction::LEFT_RIGHT:
-                        cursor_rect = { back_rect.x, back_rect.y, back_rect.w * value, back_rect.h };
-                        break;
-                    case xui::direction::RIGHT_LEFT:
-                        cursor_rect = { back_rect.x + ( back_rect.w - ( back_rect.w * value ) ), back_rect.y, back_rect.w * value, back_rect.h };
-                        break;
-                    case xui::direction::TOP_BOTTOM:
-                        cursor_rect = { back_rect.x, back_rect.y, back_rect.w, back_rect.h * value };
-                        break;
-                    case xui::direction::BOTTOM_TOP:
-                        cursor_rect = { back_rect.x, back_rect.y + ( back_rect.h - ( back_rect.h * value ) ), back_rect.w, back_rect.h * value };
-                        break;
-                    default:
-                        break;
-                    }
-
-                    draw_rect( cursor_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-                } );
-
-                if ( !text.empty() )
-                {
-                    draw_style_element( "text", [&]()
-                    {
-                        draw_text( text, current_font_id(), back_rect, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
-                    } );
+                case xui::direction::LEFT_RIGHT:
+                    cursor_rect = { back_rect.x, back_rect.y, back_rect.w * value, back_rect.h };
+                    break;
+                case xui::direction::RIGHT_LEFT:
+                    cursor_rect = { back_rect.x + ( back_rect.w - ( back_rect.w * value ) ), back_rect.y, back_rect.w * value, back_rect.h };
+                    break;
+                case xui::direction::TOP_BOTTOM:
+                    cursor_rect = { back_rect.x, back_rect.y, back_rect.w, back_rect.h * value };
+                    break;
+                case xui::direction::BOTTOM_TOP:
+                    cursor_rect = { back_rect.x, back_rect.y + ( back_rect.h - ( back_rect.h * value ) ), back_rect.w, back_rect.h * value };
+                    break;
+                default:
+                    break;
                 }
+
+                draw_rect( cursor_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
             } );
+
+            if ( !text.empty() )
+            {
+                draw_style_element( "text", [&]()
+                {
+                    draw_text( text, current_font_id(), back_rect, current_style( "font-color", xui::color() ), current_style( "text-align", xui::alignment_flag::ALIGN_CENTER ) );
+                } );
+            }
         } );
     } );
 
@@ -2295,248 +2268,245 @@ float xui::context::scrollbar( float & value, float step, float min, float max, 
 
 float xui::context::scrollbar( xui::control_id ctl_id, float & value, float step, float min, float max, xui::direction dir )
 {
-    draw_zvalue( _p->_zvalue++, [&]()
+    draw_style_type( "scrollbar", [&]()
     {
-        draw_style_type( "scrollbar", [&]()
+        draw_control_id( ctl_id, [&]()
         {
-            draw_control_id( ctl_id, [&]()
+            auto id = current_window_id();
+            auto back_rect = current_viewport();
+            xui::vec2 pos = _p->_impl->get_cursor_pos( id );
+            float arrow_radius = std::min( back_rect.w, back_rect.h );
+            xui::event_status status;
+
+            draw_rect( back_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+
+            draw_style_element( "cursor", [&]()
             {
-                auto id = current_window_id();
-                auto back_rect = current_viewport();
-                xui::vec2 pos = _p->_impl->get_cursor_pos( id );
-                float arrow_radius = std::min( back_rect.w, back_rect.h );
-                xui::event_status status;
+                std::string_view element;
 
-                draw_rect( back_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                float cursor_w = 0;
+                float cursor_h = 0;
+                float cursor_step = 0;
+                xui::rect cursor_rect = {};
+                xui::rect detect_rect = {};
 
-                draw_style_element( "cursor", [&]()
+                switch ( dir )
                 {
-                    std::string_view element;
-
-                    float cursor_w = 0;
-                    float cursor_h = 0;
-                    float cursor_step = 0;
-                    xui::rect cursor_rect = {};
-                    xui::rect detect_rect = {};
-
-                    switch ( dir )
+                case xui::direction::LEFT_RIGHT:
+                case xui::direction::RIGHT_LEFT:
+                    detect_rect = { back_rect.x + arrow_radius,  back_rect.y, back_rect.w - arrow_radius * 2, back_rect.h };
+                    draw_viewport( detect_rect, [&]()
                     {
-                    case xui::direction::LEFT_RIGHT:
-                    case xui::direction::RIGHT_LEFT:
-                        detect_rect = { back_rect.x + arrow_radius,  back_rect.y, back_rect.w - arrow_radius * 2, back_rect.h };
-                        draw_viewport( detect_rect, [&]()
-                        {
-                            status = current_event_status();
-                        } );
-                        break;
-                    case xui::direction::TOP_BOTTOM:
-                    case xui::direction::BOTTOM_TOP:
-                        detect_rect = { back_rect.x,  back_rect.y + arrow_radius, back_rect.w, back_rect.h - arrow_radius * 2 };
-                        push_viewport( detect_rect );
                         status = current_event_status();
-                        pop_viewport();
-                        break;
-                    default:
-                        break;
-                    }
+                    } );
+                    break;
+                case xui::direction::TOP_BOTTOM:
+                case xui::direction::BOTTOM_TOP:
+                    detect_rect = { back_rect.x,  back_rect.y + arrow_radius, back_rect.w, back_rect.h - arrow_radius * 2 };
+                    push_viewport( detect_rect );
+                    status = current_event_status();
+                    pop_viewport();
+                    break;
+                default:
+                    break;
+                }
 
-                    float backleft = detect_rect.x;
-                    float backright = detect_rect.x + detect_rect.w;
-                    float backtop = detect_rect.y;
-                    float backbottom = detect_rect.y + detect_rect.h;
+                float backleft = detect_rect.x;
+                float backright = detect_rect.x + detect_rect.w;
+                float backtop = detect_rect.y;
+                float backbottom = detect_rect.y + detect_rect.h;
 
-                    switch ( dir )
+                switch ( dir )
+                {
+                case xui::direction::LEFT_RIGHT:
+                {
+                    backleft += arrow_radius;
+                    backright -= arrow_radius;
+                    cursor_w = arrow_radius * 2;
+                    cursor_h = backbottom - backtop;
+                    cursor_step = ( backright - backleft ) / ( max - min );
+
+                    if ( status == xui::event_status::ACTIVE )
+                        value = std::clamp( ( ( pos.x - backleft ) / ( backright - backleft ) ) * ( max - min ), min, max );
+
+                    cursor_rect = {
+                        backleft + ( cursor_step * value ) - ( cursor_w * 0.5f ),
+                        backtop,
+                        cursor_w,
+                        cursor_h
+                    };
+                    element = "horizontal";
+                    break;
+                }
+                case xui::direction::RIGHT_LEFT:
+                {
+                    backleft += arrow_radius;
+                    backright -= arrow_radius;
+                    cursor_w = arrow_radius * 2;
+                    cursor_h = backbottom - backtop;
+                    cursor_step = ( backright - backleft ) / ( max - min );
+
+                    if ( status == xui::event_status::ACTIVE )
+                        value = std::clamp( ( ( backright - pos.x ) / ( backright - backleft ) ) * ( max - min ), min, max );
+
+                    cursor_rect = {
+                        ( backleft + ( backright - backleft ) ) - ( cursor_step * value ) - ( cursor_w * 0.5f ),
+                        backtop,
+                        cursor_w,
+                        cursor_h
+                    };
+
+                    element = "horizontal";
+                    break;
+                }
+                case xui::direction::TOP_BOTTOM:
+                {
+                    backtop += arrow_radius;
+                    backbottom -= arrow_radius;
+                    cursor_w = backright - backleft;
+                    cursor_h = arrow_radius * 2;
+                    cursor_step = ( backbottom - backtop ) / ( max - min );
+
+                    if ( status == xui::event_status::ACTIVE )
+                        value = std::clamp( ( ( pos.y - backtop ) / ( backbottom - backtop ) ) * ( max - min ), min, max );
+
+                    cursor_rect = {
+                        backleft,
+                        backtop + ( cursor_step * value ) - ( cursor_h * 0.5f ),
+                        cursor_w,
+                        cursor_h
+                    };
+
+                    element = "vertical";
+                    break;
+                }
+                case xui::direction::BOTTOM_TOP:
+                {
+                    backtop += arrow_radius;
+                    backbottom -= arrow_radius;
+                    cursor_w = backright - backleft;
+                    cursor_h = arrow_radius * 2;
+                    cursor_step = ( backbottom - backtop ) / ( max - min );
+
+                    if ( status == xui::event_status::ACTIVE )
+                        value = std::clamp( ( ( backbottom - pos.y ) / ( backbottom - backtop ) ) * ( max - min ), min, max );
+
+                    cursor_rect = {
+                        backleft,
+                        ( backtop + ( backbottom - backtop ) ) - ( cursor_step * value ) - ( cursor_h * 0.5f ),
+                        cursor_w,
+                        cursor_h
+                    };
+
+                    element = "vertical";
+                    break;
+                }
+                }
+
+                draw_style_element( element, [&]()
+                {
+                    draw_style_status( status, [&]()
                     {
-                    case xui::direction::LEFT_RIGHT:
-                    {
-                        backleft += arrow_radius;
-                        backright -= arrow_radius;
-                        cursor_w = arrow_radius * 2;
-                        cursor_h = backbottom - backtop;
-                        cursor_step = ( backright - backleft ) / ( max - min );
-
-                        if ( status == xui::event_status::ACTIVE )
-                            value = std::clamp( ( ( pos.x - backleft ) / ( backright - backleft ) ) * ( max - min ), min, max );
-
-                        cursor_rect = {
-                            backleft + ( cursor_step * value ) - ( cursor_w * 0.5f ),
-                            backtop,
-                            cursor_w,
-                            cursor_h
-                        };
-                        element = "horizontal";
-                        break;
-                    }
-                    case xui::direction::RIGHT_LEFT:
-                    {
-                        backleft += arrow_radius;
-                        backright -= arrow_radius;
-                        cursor_w = arrow_radius * 2;
-                        cursor_h = backbottom - backtop;
-                        cursor_step = ( backright - backleft ) / ( max - min );
-
-                        if ( status == xui::event_status::ACTIVE )
-                            value = std::clamp( ( ( backright - pos.x ) / ( backright - backleft ) ) * ( max - min ), min, max );
-
-                        cursor_rect = {
-                            ( backleft + ( backright - backleft ) ) - ( cursor_step * value ) - ( cursor_w * 0.5f ),
-                            backtop,
-                            cursor_w,
-                            cursor_h
-                        };
-
-                        element = "horizontal";
-                        break;
-                    }
-                    case xui::direction::TOP_BOTTOM:
-                    {
-                        backtop += arrow_radius;
-                        backbottom -= arrow_radius;
-                        cursor_w = backright - backleft;
-                        cursor_h = arrow_radius * 2;
-                        cursor_step = ( backbottom - backtop ) / ( max - min );
-
-                        if ( status == xui::event_status::ACTIVE )
-                            value = std::clamp( ( ( pos.y - backtop ) / ( backbottom - backtop ) ) * ( max - min ), min, max );
-
-                        cursor_rect = {
-                            backleft,
-                            backtop + ( cursor_step * value ) - ( cursor_h * 0.5f ),
-                            cursor_w,
-                            cursor_h
-                        };
-
-                        element = "vertical";
-                        break;
-                    }
-                    case xui::direction::BOTTOM_TOP:
-                    {
-                        backtop += arrow_radius;
-                        backbottom -= arrow_radius;
-                        cursor_w = backright - backleft;
-                        cursor_h = arrow_radius * 2;
-                        cursor_step = ( backbottom - backtop ) / ( max - min );
-
-                        if ( status == xui::event_status::ACTIVE )
-                            value = std::clamp( ( ( backbottom - pos.y ) / ( backbottom - backtop ) ) * ( max - min ), min, max );
-
-                        cursor_rect = {
-                            backleft,
-                            ( backtop + ( backbottom - backtop ) ) - ( cursor_step * value ) - ( cursor_h * 0.5f ),
-                            cursor_w,
-                            cursor_h
-                        };
-
-                        element = "vertical";
-                        break;
-                    }
-                    }
-
-                    draw_style_element( element, [&]()
-                    {
-                        draw_style_status( status, [&]()
-                        {
-                            draw_rect( cursor_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-                        } );
+                        draw_rect( cursor_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
                     } );
                 } );
+            } );
 
-                draw_style_element( "arrow", [&]()
+            draw_style_element( "arrow", [&]()
+            {
+                xui::rect arrow_rect = {};
+
+                switch ( dir )
                 {
-                    xui::rect arrow_rect = {};
-
-                    switch ( dir )
+                case xui::direction::LEFT_RIGHT:
+                case xui::direction::RIGHT_LEFT:
+                    // left
+                    arrow_rect = { back_rect.x, back_rect.y, arrow_radius, arrow_radius };
+                    draw_viewport( arrow_rect, [&]()
                     {
-                    case xui::direction::LEFT_RIGHT:
-                    case xui::direction::RIGHT_LEFT:
-                        // left
-                        arrow_rect = { back_rect.x, back_rect.y, arrow_radius, arrow_radius };
-                        draw_viewport( arrow_rect, [&]()
+                        status = current_event_status();
+
+                        if ( status == xui::event_status::ACTIVE )
+                            value = std::clamp( value + ( dir == xui::direction::LEFT_RIGHT ? -step : step ), min, max );
+
+                        draw_style_status( status, [&]()
                         {
-                            status = current_event_status();
+                            draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
-                            if ( status == xui::event_status::ACTIVE )
-                                value = std::clamp( value + ( dir == xui::direction::LEFT_RIGHT ? -step : step ), min, max );
-
-                            draw_style_status( status, [&]()
-                            {
-                                draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-
-                                draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
-                                    .moveto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.5f } )
-                                    .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.3f } )
-                                    .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.7f } )
-                                    .closepath();
-                            } );
+                            draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                                .moveto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.5f } )
+                                .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.3f } )
+                                .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.7f } )
+                                .closepath();
                         } );
+                    } );
 
-                        // right
-                        arrow_rect = { back_rect.x + back_rect.w - arrow_radius, back_rect.y, arrow_radius, arrow_radius };
-                        draw_viewport( arrow_rect, [&]()
+                    // right
+                    arrow_rect = { back_rect.x + back_rect.w - arrow_radius, back_rect.y, arrow_radius, arrow_radius };
+                    draw_viewport( arrow_rect, [&]()
+                    {
+                        status = current_event_status();
+
+                        if ( status == xui::event_status::ACTIVE )
+                            value = std::clamp( value + ( dir == xui::direction::RIGHT_LEFT ? -step : step ), min, max );
+
+                        draw_style_status( status, [&]()
                         {
-                            status = current_event_status();
+                            draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
-                            if ( status == xui::event_status::ACTIVE )
-                                value = std::clamp( value + ( dir == xui::direction::RIGHT_LEFT ? -step : step ), min, max );
-
-                            draw_style_status( status, [&]()
-                            {
-                                draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-
-                                draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
-                                    .moveto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.5f } )
-                                    .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.3f } )
-                                    .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.7f } )
-                                    .closepath();
-                            } );
+                            draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                                .moveto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.5f } )
+                                .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.3f } )
+                                .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.7f } )
+                                .closepath();
                         } );
-                        break;
-                    case xui::direction::TOP_BOTTOM:
-                    case xui::direction::BOTTOM_TOP:
-                        // up
-                        arrow_rect = { back_rect.x, back_rect.y, arrow_radius, arrow_radius };
-                        draw_viewport( arrow_rect, [&]()
+                    } );
+                    break;
+                case xui::direction::TOP_BOTTOM:
+                case xui::direction::BOTTOM_TOP:
+                    // up
+                    arrow_rect = { back_rect.x, back_rect.y, arrow_radius, arrow_radius };
+                    draw_viewport( arrow_rect, [&]()
+                    {
+                        status = current_event_status();
+
+                        if ( status == xui::event_status::ACTIVE )
+                            value = std::clamp( value + ( dir == xui::direction::TOP_BOTTOM ? -step : step ), min, max );
+
+                        draw_style_status( status, [&]()
                         {
-                            status = current_event_status();
+                            draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
-                            if ( status == xui::event_status::ACTIVE )
-                                value = std::clamp( value + ( dir == xui::direction::TOP_BOTTOM ? -step : step ), min, max );
-
-                            draw_style_status( status, [&]()
-                            {
-                                draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-
-                                draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
-                                    .moveto( { arrow_rect.x + arrow_rect.w * 0.5f, arrow_rect.y + arrow_rect.h * 0.3f } )
-                                    .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.7f } )
-                                    .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.7f } )
-                                    .closepath();
-                            } );
+                            draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                                .moveto( { arrow_rect.x + arrow_rect.w * 0.5f, arrow_rect.y + arrow_rect.h * 0.3f } )
+                                .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.7f } )
+                                .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.7f } )
+                                .closepath();
                         } );
+                    } );
 
-                        // down
-                        arrow_rect = { back_rect.x, back_rect.y + back_rect.h - arrow_radius, arrow_radius, arrow_radius };
-                        draw_viewport( arrow_rect, [&]()
+                    // down
+                    arrow_rect = { back_rect.x, back_rect.y + back_rect.h - arrow_radius, arrow_radius, arrow_radius };
+                    draw_viewport( arrow_rect, [&]()
+                    {
+                        status = current_event_status();
+
+                        if ( status == xui::event_status::ACTIVE )
+                            value = std::clamp( value + ( dir == xui::direction::BOTTOM_TOP ? -step : step ), min, max );
+
+                        draw_style_status( status, [&]()
                         {
-                            status = current_event_status();
+                            draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
-                            if ( status == xui::event_status::ACTIVE )
-                                value = std::clamp( value + ( dir == xui::direction::BOTTOM_TOP ? -step : step ), min, max );
-
-                            draw_style_status( status, [&]()
-                            {
-                                draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
-
-                                draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
-                                    .moveto( { arrow_rect.x + arrow_rect.w * 0.5f, arrow_rect.y + arrow_rect.h * 0.7f } )
-                                    .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.3f } )
-                                    .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.3f } )
-                                    .closepath();
-                            } );
+                            draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                                .moveto( { arrow_rect.x + arrow_rect.w * 0.5f, arrow_rect.y + arrow_rect.h * 0.7f } )
+                                .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.3f } )
+                                .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.3f } )
+                                .closepath();
                         } );
-                        break;
-                    }
-                } );
+                    } );
+                    break;
+                }
             } );
         } );
     } );
@@ -2546,7 +2516,7 @@ float xui::context::scrollbar( xui::control_id ctl_id, float & value, float step
 
 bool xui::context::menu( xui::item_model * model, xui::control_id & select_id )
 {
-    draw_zvalue( popup_zvalue + _p->_zvalue++, [&]()
+    draw_zlevel( popup_z_level, [&]()
     {
         draw_style_element( "menu", [&]()
         {
@@ -2566,8 +2536,8 @@ bool xui::context::menu( xui::item_model * model, xui::control_id & select_id )
 
 
                     float w = _p->_impl->font_size( current_font_id(), model->item_data( id, xui::menu_model::NAME ).value<std::string>() ).w;
-                    if ( model->item_data( id, xui::menu_model::ICON ).value<xui::texture_id>() != xui::invalid_texture_id ) w += 30;
-                    if ( model->item_data( id, xui::menu_model::IS_MENU ).value<bool>() ) w += 30;
+                    if ( model->item_data( id, xui::menu_model::ICON ).value<xui::texture_id>() != xui::invalid_texture_id ) w += XUI_SCALE( 30 );
+                    if ( model->item_data( id, xui::menu_model::IS_MENU ).value<bool>() ) w += XUI_SCALE( 30 );
 
                     maxw = std::max( maxw, w );
 
@@ -2576,13 +2546,13 @@ bool xui::context::menu( xui::item_model * model, xui::control_id & select_id )
 
                 if ( count > 0 )
                 {
-                    xui::rect list_rect = { rect.x, rect.y, maxw, count * 30.0f };
+                    xui::rect list_rect = { rect.x, rect.y, maxw, count * XUI_SCALE( 30.0f ) };
 
                     draw_rect( list_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
                     for ( int row = 0; row < count; row++ )
                     {
-                        xui::rect sub_item_rect = { list_rect.x, list_rect.y + row * 30, list_rect.w, 30 };
+                        xui::rect sub_item_rect = { list_rect.x, list_rect.y + row * XUI_SCALE( 30 ), list_rect.w, XUI_SCALE( 30 ) };
                         draw_viewport( sub_item_rect, [&]()
                         {
                             menu_item( row, 0, {}, model, select_id );
@@ -2617,7 +2587,7 @@ bool xui::context::menu_item( int row, int col, xui::control_id parent, xui::ite
     auto menu = model->item_data( id, menu_model::IS_MENU ).value<bool>();
     auto select = model->item_data( id, menu_model::IS_SELECTED ).value<bool>();
 
-    draw_zvalue( popup_zvalue + _p->_zvalue++, [&]()
+    draw_zlevel( popup_z_level, [&]()
     {
         draw_style_element( "item", [&]()
         {
@@ -2680,8 +2650,8 @@ bool xui::context::menu_item( int row, int col, xui::control_id parent, xui::ite
                 auto cid = model->index( count, 0, id );
 
                 float w = _p->_impl->font_size( current_font_id(), model->item_data( cid, xui::menu_model::NAME ).value<std::string>() ).w;
-                if ( model->item_data( cid, xui::menu_model::ICON ).value<xui::texture_id>() != xui::invalid_texture_id ) w += 30;
-                if ( model->item_data( cid, xui::menu_model::IS_MENU ).value<bool>() ) w += 30;
+                if ( model->item_data( cid, xui::menu_model::ICON ).value<xui::texture_id>() != xui::invalid_texture_id ) w += XUI_SCALE( 30 );
+                if ( model->item_data( cid, xui::menu_model::IS_MENU ).value<bool>() ) w += XUI_SCALE( 30 );
 
                 maxw = std::max( maxw, w );
 
@@ -2692,13 +2662,13 @@ bool xui::context::menu_item( int row, int col, xui::control_id parent, xui::ite
             {
                 auto rect = current_viewport();
 
-                xui::rect list_rect = { rect.x + rect.w, rect.y, maxw, count * 30.0f };
+                xui::rect list_rect = { rect.x + rect.w, rect.y, maxw, count * XUI_SCALE( 30.0f ) };
 
                 draw_rect( list_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
 
                 for ( int row = 0; row < count; row++ )
                 {
-                    xui::rect sub_item_rect = { list_rect.x, list_rect.y + row * 30, list_rect.w, 30 };
+                    xui::rect sub_item_rect = { list_rect.x, list_rect.y + row * XUI_SCALE( 30 ), list_rect.w, XUI_SCALE( 30 ) };
                     draw_viewport( sub_item_rect, [&]()
                     {
                         menu_item( row, 0, id, model, select_id );
@@ -2713,14 +2683,14 @@ bool xui::context::menu_item( int row, int col, xui::control_id parent, xui::ite
 
 bool xui::context::menubar( xui::item_model * model, xui::control_id & select_id )
 {
-    draw_zvalue( popup_zvalue + _p->_zvalue++, [&]()
+    draw_zlevel( popup_z_level, [&]()
     {
         draw_style_type( "menubar", [&]()
         {
             draw_control_id( model->control_id, [&]()
             {
                 auto rect = current_viewport();
-                xui::rect menubar_rect = { rect.x, rect.y - 1, rect.w, 30 };
+                xui::rect menubar_rect = { rect.x, rect.y - 1, rect.w, XUI_SCALE( 30 ) };
 
                 draw_viewport( menubar_rect, [&]()
                 {
@@ -2787,11 +2757,11 @@ bool xui::context::menubar( xui::item_model * model, xui::control_id & select_id
                     }
                 } );
 
-                push_viewport( rect.margins_added( 0, 0, 30, 0 ) );
+                push_viewport( rect.margins_added( 0, 0, XUI_SCALE( 30 ), 0 ) );
             } );
         } );
     } );
-    
+
     if ( !select_id.empty() )
     {
         for ( int row = 0; model->item_exist( row, 0, {} ); ++row )
@@ -2818,7 +2788,7 @@ xui::drawcmd::text_element & xui::context::draw_text( std::string_view text, xui
     element.color = font_color;
     element.align = text_align;
 
-    _p->_commands.push_back( { current_zvalue(), current_window_id(), element } );
+    _p->_commands.push_back( { current_zlevel() + _p->_zvalue++, current_window_id(), element } );
 
     return std::get<xui::drawcmd::text_element>( _p->_commands.back().element );
 }
@@ -2831,7 +2801,7 @@ xui::drawcmd::line_element & xui::context::draw_line( const xui::vec2 & p1, cons
     element.p2 = p2;
     element.stroke = stroke;
 
-    _p->_commands.push_back( { current_zvalue(),current_window_id(), element } );
+    _p->_commands.push_back( { current_zlevel() + _p->_zvalue++,current_window_id(), element } );
 
     return std::get<xui::drawcmd::line_element>( _p->_commands.back().element );
 }
@@ -2844,7 +2814,7 @@ xui::drawcmd::rect_element & xui::context::draw_rect( const xui::rect & rect, co
     element.border = border;
     element.filled = filled;
 
-    _p->_commands.push_back( { current_zvalue(),current_window_id(), element } );
+    _p->_commands.push_back( { current_zlevel() + _p->_zvalue++,current_window_id(), element } );
 
     return std::get<xui::drawcmd::rect_element>( _p->_commands.back().element );
 }
@@ -2856,7 +2826,7 @@ xui::drawcmd::path_element & xui::context::draw_path( const xui::stroke & stroke
     element.stroke = stroke;
     element.filled = filled;
 
-    _p->_commands.push_back( { current_zvalue(),current_window_id(), element } );
+    _p->_commands.push_back( { current_zlevel() + _p->_zvalue++,current_window_id(), element } );
 
     return std::get<xui::drawcmd::path_element>( _p->_commands.back().element );
 }
@@ -2868,7 +2838,7 @@ xui::drawcmd::image_element & xui::context::draw_image( xui::texture_id id, cons
     element.id = id;
     element.rect = rect;
 
-    _p->_commands.push_back( { current_zvalue(),current_window_id(), element } );
+    _p->_commands.push_back( { current_zlevel() + _p->_zvalue++,current_window_id(), element } );
 
     return std::get<xui::drawcmd::image_element>( _p->_commands.back().element );
 }
@@ -2882,7 +2852,7 @@ xui::drawcmd::circle_element & xui::context::draw_circle( const xui::vec2 & cent
     element.border = border;
     element.filled = filled;
 
-    _p->_commands.push_back( { current_zvalue(),current_window_id(), element } );
+    _p->_commands.push_back( { current_zlevel() + _p->_zvalue++,current_window_id(), element } );
 
     return std::get<xui::drawcmd::circle_element>( _p->_commands.back().element );
 }
@@ -2896,7 +2866,7 @@ xui::drawcmd::ellipse_element & xui::context::draw_ellipse( const xui::vec2 & ce
     element.border = border;
     element.filled = filled;
 
-    _p->_commands.push_back( { current_zvalue(),current_window_id(), element } );
+    _p->_commands.push_back( { current_zlevel() + _p->_zvalue++,current_window_id(), element } );
 
     return std::get<xui::drawcmd::ellipse_element>( _p->_commands.back().element );
 }
@@ -2909,7 +2879,7 @@ xui::drawcmd::polygon_element & xui::context::draw_polygon( std::span<xui::vec2>
     element.border = border;
     element.filled = filled;
 
-    _p->_commands.push_back( { current_zvalue(), current_window_id(), element } );
+    _p->_commands.push_back( { current_zlevel() + _p->_zvalue++, current_window_id(), element } );
 
     return std::get<xui::drawcmd::polygon_element>( _p->_commands.back().element );
 }

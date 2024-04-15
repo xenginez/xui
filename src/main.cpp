@@ -19,7 +19,7 @@ int main()
 
 	imp.init();
 	ctx.init( &imp );
-
+	//ctx.set_scale( 2 );
 	auto font = imp.create_font( system_resource::FONT_DEFAULT, 16, xui::font_flag::FONT_NONE );
 	auto icon = imp.create_texture( system_resource::ICON_APPLICATION );
 	auto window = imp.create_window( "XUI", icon, { 500, 300, 600, 600 } );
@@ -103,7 +103,7 @@ int main()
 					auto rect = ctx.current_viewport();
 
 					ctx.push_viewport( { rect.x + rect.w - 20, rect.y, 20, rect.h - 20 } );
-					ctx.scrollbar( vscollbar_value, 0.1f, 0, 1, xui::direction::TOP_BOTTOM );
+					std::cout << ctx.scrollbar( vscollbar_value, 0.1f, 0, 1, xui::direction::TOP_BOTTOM ) << std::endl;
 					ctx.pop_viewport();
 
 					ctx.push_viewport( { rect.x, rect.y + rect.h - 20, rect.w - 20, 20 } );
