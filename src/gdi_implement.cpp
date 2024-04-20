@@ -297,46 +297,32 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         else if ( msg.message == WM_LBUTTONDBLCLK )
         {
             set_event( id, xui::event::KEY_MOUSE_LEFT_DBCLICK, 1 );
-
-            std::cout << "WM_LBUTTONDBLCLK" << std::endl;
         }
         else if ( msg.message == WM_RBUTTONDBLCLK )
         {
             set_event( id, xui::event::KEY_MOUSE_RIGHT_DBCLICK, 1 );
-
-            std::cout << "WM_RBUTTONDBLCLK" << std::endl;
         }
         else if ( msg.message == WM_MBUTTONDBLCLK )
         {
             set_event( id, xui::event::KEY_MOUSE_MIDDLE_DBCLICK, 1 );
-
-            std::cout << "WM_MBUTTONDBLCLK" << std::endl;
         }
         else if ( msg.message == WM_LBUTTONDOWN )
         {
             SetCapture( msg.hwnd );
 
             set_event( id, xui::event::KEY_MOUSE_LEFT, 1 );
-
-            std::cout << "WM_LBUTTONDOWN" << std::endl;
         }
         else if ( msg.message == WM_RBUTTONDOWN )
         {
             set_event( id, xui::event::KEY_MOUSE_RIGHT, 1 );
-
-            std::cout << "WM_RBUTTONDOWN" << std::endl;
         }
         else if ( msg.message == WM_MBUTTONDOWN )
         {
             set_event( id, xui::event::KEY_MOUSE_MIDDLE, 1 );
-
-            std::cout << "WM_MBUTTONDOWN" << std::endl;
         }
         else if ( msg.message == WM_MOUSEWHEEL )
         {
             set_wheel( id, { 0.0f, float( int( msg.wParam ) / WHEEL_DELTA ) } );
-
-            std::cout << "WM_MOUSEWHEEL: " << std::dec << ( int( msg.wParam ) / WHEEL_DELTA ) << std::endl;
         }
         else if ( msg.message == WM_LBUTTONUP )
         {
@@ -344,22 +330,16 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
 
             set_event( id, xui::event::KEY_MOUSE_LEFT, 0 );
             set_event( id, xui::event::KEY_MOUSE_LEFT_CLICK, 1 );
-
-            std::cout << "WM_LBUTTONUP" << std::endl;
         }
         else if ( msg.message == WM_RBUTTONUP )
         {
             set_event( id, xui::event::KEY_MOUSE_RIGHT, 0 );
             set_event( id, xui::event::KEY_MOUSE_RIGHT_CLICK, 1 );
-
-            std::cout << "WM_RBUTTONUP" << std::endl;
         }
         else if ( msg.message == WM_MBUTTONUP )
         {
             set_event( id, xui::event::KEY_MOUSE_MIDDLE, 0 );
             set_event( id, xui::event::KEY_MOUSE_MIDDLE_CLICK, 1 );
-
-            std::cout << "WM_MBUTTONUP" << std::endl;
         }
         else if ( msg.message == WM_MOUSEMOVE )
         {
@@ -375,44 +355,30 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
         else if ( msg.message == WM_MOUSEHOVER )
         {
             set_event( id, xui::event::WINDOW_ACTIVE, 1 );
-
-            std::cout << "WM_MOUSEHOVER" << std::endl;
         }
         else if ( msg.message == WM_MOUSELEAVE )
         {
             set_event( id, xui::event::WINDOW_ACTIVE, 0 );
-
-            std::cout << "WM_MOUSELEAVE" << std::endl;
         }
         else if ( msg.message == WM_SETFOCUS )
         {
             set_event( id, xui::event::WINDOW_ACTIVE, 1 );
-
-            std::cout << "WM_SETFOCUS" << std::endl;
         }
         else if ( msg.message == WM_KILLFOCUS )
         {
             set_event( id, xui::event::WINDOW_ACTIVE, 0 );
-
-            std::cout << "WM_KILLFOCUS" << std::endl;
         }
         else if ( msg.message == WM_ACTIVATE )
         {
             set_event( id, xui::event::WINDOW_ACTIVE, 1 );
-
-            std::cout << "WM_ACTIVATE" << std::endl;
         }
         else if ( msg.message == WM_MOUSEACTIVATE )
         {
             set_event( id, xui::event::WINDOW_ACTIVE, 1 );
-
-            std::cout << "WM_MOUSEACTIVATE" << std::endl;
         }
         else if ( msg.message == WM_ACTIVATEAPP )
         {
             set_event( id, xui::event::WINDOW_ACTIVE, 1 );
-
-            std::cout << "WM_ACTIVATEAPP" << std::endl;
             }
         else if ( msg.message == WM_TOUCH )
         {
@@ -455,22 +421,16 @@ void gdi_implement::update( const std::function<std::span<xui::drawcmd>()> & pai
             auto key = key_event( msg.wParam );
             if ( key != xui::event::EVENT_MAX_COUNT )
                 set_event( id, key, 1 );
-
-            std::cout << "WM_KEYDOWN" << std::endl;
         }
         else if ( msg.message == WM_KEYUP )
         {
             auto key = key_event( msg.wParam );
             if ( key != xui::event::EVENT_MAX_COUNT )
                 set_event( id, key, 0 );
-
-            std::cout << "WM_KEYUP" << std::endl;
         }
         else if ( msg.message == WM_CHAR )
         {
             set_unicode( id, (wchar_t)msg.wParam );
-
-            std::wcout << L"WM_CHAR: \'" << (wchar_t)msg.wParam << L"\'" << std::endl;
         }
         else
         {

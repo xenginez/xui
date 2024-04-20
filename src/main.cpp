@@ -103,7 +103,7 @@ int main()
 					auto rect = ctx.current_viewport();
 
 					ctx.push_viewport( { rect.x + rect.w - 20, rect.y, 20, rect.h - 20 } );
-					std::cout << ctx.scrollbar( vscollbar_value, 0.1f, 0, 1, xui::direction::TOP_BOTTOM ) << std::endl;
+					ctx.scrollbar( vscollbar_value, 0.1f, 0, 1, xui::direction::TOP_BOTTOM );
 					ctx.pop_viewport();
 
 					ctx.push_viewport( { rect.x, rect.y + rect.h - 20, rect.w - 20, 20 } );

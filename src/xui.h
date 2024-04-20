@@ -11,6 +11,7 @@
 #include <system_error>
 #include <memory_resource>
 
+
 #ifndef XUI_FONT_ID
 #define XUI_FONT_ID std::size_t
 #define XUI_INVALID_FONT_ID std::numeric_limits<std::size_t>::max()
@@ -200,32 +201,30 @@ namespace xui
 	};
 	enum layout_wrap
 	{
-		LAYOUT_WRAP_NO_WRAP = 0,
-		LAYOUT_WRAP_WRAP,
-		LAYOUT_WRAP_WRAP_REVERSE
+		LAYOUT_NO_WRAP = 0,
+		LAYOUT_WRAP,
+		LAYOUT_WRAP_REVERSE
 	};
 	enum layout_align
 	{
-		LAYOUT_ALIGN_AUTO = 0,
-		LAYOUT_ALIGN_STRETCH,
-		LAYOUT_ALIGN_CENTER,
-		LAYOUT_ALIGN_START,
-		LAYOUT_ALIGN_END,
-		LAYOUT_ALIGN_SPACE_BETWEEN,
-		LAYOUT_ALIGN_SPACE_AROUND,
-		LAYOUT_ALIGN_SPACE_EVENLY
+		LAYOUT_AUTO = 0,
+		LAYOUT_STRETCH,
+		LAYOUT_CENTER,
+		LAYOUT_START,
+		LAYOUT_END,
+		LAYOUT_SPACE_BETWEEN,
+		LAYOUT_SPACE_AROUND,
+		LAYOUT_SPACE_EVENLY
 	};
 	enum layout_position
 	{
-		LAYOUT_POSITION_RELATIVE = 0,
-		LAYOUT_POSITION_ABSOLUTE
+		LAYOUT_RELATIVE = 0,
+		LAYOUT_ABSOLUTE
 	};
 	enum layout_direction
 	{
-		LAYOUT_DIRECTION_ROW = xui::direction::LEFT_RIGHT,
-		LAYOUT_DIRECTION_ROW_REVERSE = xui::direction::RIGHT_LEFT,
-		LAYOUT_DIRECTION_COLUMN = xui::direction::TOP_BOTTOM,
-		LAYOUT_DIRECTION_COLUMN_REVERSE = xui::direction::BOTTOM_TOP,
+		LAYOUT_NORMAL,
+		LAYOUT_REVERSE,
 	};
 
 	enum font_flag
@@ -743,7 +742,7 @@ namespace xui
 			xui::filled filled;
 			std::pmr::vector<xui::vec2> points;
 		};
-
+		
 	public:
 		size_t z = 0;
 		window_id id = xui::invalid_window_id;
@@ -916,6 +915,11 @@ namespace xui
 		std::span<xui::drawcmd> end();
 
 	public:
+		bool begin_window( std::string_view title, xui::texture_id icon_id, int flags = xui::window_flag::WINDOW_NONE );
+		bool begin_window( xui::control_id ctl_id, std::string_view title, xui::texture_id icon_id, int flags = xui::window_flag::WINDOW_NONE );
+		void end_window();
+
+	public:
 		bool image( xui::texture_id id );
 		bool image( xui::control_id ctl_id, xui::texture_id id );
 		bool label( std::string_view text );
@@ -938,13 +942,12 @@ namespace xui
 		bool menubar( xui::item_model * model, xui::control_id & select_id );
 
 	public:
-		bool begin_window( std::string_view title, xui::texture_id icon_id, int flags = xui::window_flag::WINDOW_NONE );
-		bool begin_window( xui::control_id ctl_id, std::string_view title, xui::texture_id icon_id, int flags = xui::window_flag::WINDOW_NONE );
-		void end_window();
-
-	public:
-		bool begin_layout();
-		void end_layout();
+		bool begin_horizontal_layout( std::span<int> stretch, xui::layout_direction dir = xui::layout_direction::LAYOUT_NORMAL );
+		void end_horizontal_layout();
+		bool begin_vertical_layout();
+		void end_vertical_layout();
+		bool begin_grid_layout();
+		void end_grid_layout();
 
 	public:
 		bool begin_combobox();
@@ -1080,6 +1083,11 @@ namespace xui
 		virtual value_t col_header_data( int col, int role ) { return {}; }
 		virtual void row_header_data( int row, int role, const value_t & val ) {}
 		virtual void col_header_data( int col, int role, const value_t & val ) {}
+
+	public:
+		virtual bool is_item_custom() const { return false; }
+		virtual xui::size item_size_hint() const { return {}; }
+		virtual void draw_item( xui::context * ctx, const xui::rect & rect ) const {}
 
 	public:
 		std::string control_id;

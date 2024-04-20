@@ -2282,132 +2282,133 @@ float xui::context::scrollbar( xui::control_id ctl_id, float & value, float step
 
             draw_style_element( "cursor", [&]()
             {
-                std::string_view element;
-
-                float cursor_w = 0;
-                float cursor_h = 0;
-                float cursor_step = 0;
-                xui::rect cursor_rect = {};
-                xui::rect detect_rect = {};
-
-                switch ( dir )
+                draw_control_id( std::format( "{}-{}", ctl_id, "cursor" ), [&]()
                 {
-                case xui::direction::LEFT_RIGHT:
-                case xui::direction::RIGHT_LEFT:
-                    detect_rect = { back_rect.x + arrow_radius,  back_rect.y, back_rect.w - arrow_radius * 2, back_rect.h };
+                    std::string_view element;
+
+                    float cursor_w = 0;
+                    float cursor_h = 0;
+                    float cursor_step = 0;
+                    xui::rect cursor_rect = {};
+                    xui::rect detect_rect = {};
+
+                    switch ( dir )
+                    {
+                    case xui::direction::LEFT_RIGHT:
+                    case xui::direction::RIGHT_LEFT:
+                        detect_rect = { back_rect.x + arrow_radius,  back_rect.y, back_rect.w - arrow_radius * 2, back_rect.h };
+                        break;
+                    case xui::direction::TOP_BOTTOM:
+                    case xui::direction::BOTTOM_TOP:
+                        detect_rect = { back_rect.x,  back_rect.y + arrow_radius, back_rect.w, back_rect.h - arrow_radius * 2 };
+                        break;
+                    default:
+                        break;
+                    }
+
                     draw_viewport( detect_rect, [&]()
                     {
                         status = current_event_status();
-                    } );
-                    break;
-                case xui::direction::TOP_BOTTOM:
-                case xui::direction::BOTTOM_TOP:
-                    detect_rect = { back_rect.x,  back_rect.y + arrow_radius, back_rect.w, back_rect.h - arrow_radius * 2 };
-                    push_viewport( detect_rect );
-                    status = current_event_status();
-                    pop_viewport();
-                    break;
-                default:
-                    break;
-                }
 
-                float backleft = detect_rect.x;
-                float backright = detect_rect.x + detect_rect.w;
-                float backtop = detect_rect.y;
-                float backbottom = detect_rect.y + detect_rect.h;
+                        float backleft = detect_rect.x;
+                        float backright = detect_rect.x + detect_rect.w;
+                        float backtop = detect_rect.y;
+                        float backbottom = detect_rect.y + detect_rect.h;
 
-                switch ( dir )
-                {
-                case xui::direction::LEFT_RIGHT:
-                {
-                    backleft += arrow_radius;
-                    backright -= arrow_radius;
-                    cursor_w = arrow_radius * 2;
-                    cursor_h = backbottom - backtop;
-                    cursor_step = ( backright - backleft ) / ( max - min );
+                        switch ( dir )
+                        {
+                        case xui::direction::LEFT_RIGHT:
+                        {
+                            backleft += arrow_radius;
+                            backright -= arrow_radius;
+                            cursor_w = arrow_radius * 2;
+                            cursor_h = backbottom - backtop;
+                            cursor_step = ( backright - backleft ) / ( max - min );
 
-                    if ( status == xui::event_status::ACTIVE )
-                        value = std::clamp( ( ( pos.x - backleft ) / ( backright - backleft ) ) * ( max - min ), min, max );
+                            if ( status == xui::event_status::ACTIVE )
+                                value = std::clamp( ( ( pos.x - backleft ) / ( backright - backleft ) ) * ( max - min ), min, max );
 
-                    cursor_rect = {
-                        backleft + ( cursor_step * value ) - ( cursor_w * 0.5f ),
-                        backtop,
-                        cursor_w,
-                        cursor_h
-                    };
-                    element = "horizontal";
-                    break;
-                }
-                case xui::direction::RIGHT_LEFT:
-                {
-                    backleft += arrow_radius;
-                    backright -= arrow_radius;
-                    cursor_w = arrow_radius * 2;
-                    cursor_h = backbottom - backtop;
-                    cursor_step = ( backright - backleft ) / ( max - min );
+                            cursor_rect = {
+                                backleft + ( cursor_step * value ) - ( cursor_w * 0.5f ),
+                                backtop,
+                                cursor_w,
+                                cursor_h
+                            };
+                            element = "horizontal";
+                            break;
+                        }
+                        case xui::direction::RIGHT_LEFT:
+                        {
+                            backleft += arrow_radius;
+                            backright -= arrow_radius;
+                            cursor_w = arrow_radius * 2;
+                            cursor_h = backbottom - backtop;
+                            cursor_step = ( backright - backleft ) / ( max - min );
 
-                    if ( status == xui::event_status::ACTIVE )
-                        value = std::clamp( ( ( backright - pos.x ) / ( backright - backleft ) ) * ( max - min ), min, max );
+                            if ( status == xui::event_status::ACTIVE )
+                                value = std::clamp( ( ( backright - pos.x ) / ( backright - backleft ) ) * ( max - min ), min, max );
 
-                    cursor_rect = {
-                        ( backleft + ( backright - backleft ) ) - ( cursor_step * value ) - ( cursor_w * 0.5f ),
-                        backtop,
-                        cursor_w,
-                        cursor_h
-                    };
+                            cursor_rect = {
+                                ( backleft + ( backright - backleft ) ) - ( cursor_step * value ) - ( cursor_w * 0.5f ),
+                                backtop,
+                                cursor_w,
+                                cursor_h
+                            };
 
-                    element = "horizontal";
-                    break;
-                }
-                case xui::direction::TOP_BOTTOM:
-                {
-                    backtop += arrow_radius;
-                    backbottom -= arrow_radius;
-                    cursor_w = backright - backleft;
-                    cursor_h = arrow_radius * 2;
-                    cursor_step = ( backbottom - backtop ) / ( max - min );
+                            element = "horizontal";
+                            break;
+                        }
+                        case xui::direction::TOP_BOTTOM:
+                        {
+                            backtop += arrow_radius;
+                            backbottom -= arrow_radius;
+                            cursor_w = backright - backleft;
+                            cursor_h = arrow_radius * 2;
+                            cursor_step = ( backbottom - backtop ) / ( max - min );
 
-                    if ( status == xui::event_status::ACTIVE )
-                        value = std::clamp( ( ( pos.y - backtop ) / ( backbottom - backtop ) ) * ( max - min ), min, max );
+                            if ( status == xui::event_status::ACTIVE )
+                                value = std::clamp( ( ( pos.y - backtop ) / ( backbottom - backtop ) ) * ( max - min ), min, max );
 
-                    cursor_rect = {
-                        backleft,
-                        backtop + ( cursor_step * value ) - ( cursor_h * 0.5f ),
-                        cursor_w,
-                        cursor_h
-                    };
+                            cursor_rect = {
+                                backleft,
+                                backtop + ( cursor_step * value ) - ( cursor_h * 0.5f ),
+                                cursor_w,
+                                cursor_h
+                            };
 
-                    element = "vertical";
-                    break;
-                }
-                case xui::direction::BOTTOM_TOP:
-                {
-                    backtop += arrow_radius;
-                    backbottom -= arrow_radius;
-                    cursor_w = backright - backleft;
-                    cursor_h = arrow_radius * 2;
-                    cursor_step = ( backbottom - backtop ) / ( max - min );
+                            element = "vertical";
+                            break;
+                        }
+                        case xui::direction::BOTTOM_TOP:
+                        {
+                            backtop += arrow_radius;
+                            backbottom -= arrow_radius;
+                            cursor_w = backright - backleft;
+                            cursor_h = arrow_radius * 2;
+                            cursor_step = ( backbottom - backtop ) / ( max - min );
 
-                    if ( status == xui::event_status::ACTIVE )
-                        value = std::clamp( ( ( backbottom - pos.y ) / ( backbottom - backtop ) ) * ( max - min ), min, max );
+                            if ( status == xui::event_status::ACTIVE )
+                                value = std::clamp( ( ( backbottom - pos.y ) / ( backbottom - backtop ) ) * ( max - min ), min, max );
 
-                    cursor_rect = {
-                        backleft,
-                        ( backtop + ( backbottom - backtop ) ) - ( cursor_step * value ) - ( cursor_h * 0.5f ),
-                        cursor_w,
-                        cursor_h
-                    };
+                            cursor_rect = {
+                                backleft,
+                                ( backtop + ( backbottom - backtop ) ) - ( cursor_step * value ) - ( cursor_h * 0.5f ),
+                                cursor_w,
+                                cursor_h
+                            };
 
-                    element = "vertical";
-                    break;
-                }
-                }
+                            element = "vertical";
+                            break;
+                        }
+                        }
 
-                draw_style_element( element, [&]()
-                {
-                    draw_style_status( status, [&]()
-                    {
-                        draw_rect( cursor_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                        draw_style_element( element, [&]()
+                        {
+                            draw_style_status( status, [&]()
+                            {
+                                draw_rect( cursor_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                            } );
+                        } );
                     } );
                 } );
             } );
@@ -2421,88 +2422,100 @@ float xui::context::scrollbar( xui::control_id ctl_id, float & value, float step
                 case xui::direction::LEFT_RIGHT:
                 case xui::direction::RIGHT_LEFT:
                     // left
-                    arrow_rect = { back_rect.x, back_rect.y, arrow_radius, arrow_radius };
-                    draw_viewport( arrow_rect, [&]()
+                    draw_control_id( std::format( "{}-{}-{}", ctl_id, "arrow", "left" ), [&]()
                     {
-                        status = current_event_status();
-
-                        if ( status == xui::event_status::ACTIVE )
-                            value = std::clamp( value + ( dir == xui::direction::LEFT_RIGHT ? -step : step ), min, max );
-
-                        draw_style_status( status, [&]()
+                        arrow_rect = { back_rect.x, back_rect.y, arrow_radius, arrow_radius };
+                        draw_viewport( arrow_rect, [&]()
                         {
-                            draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                            status = current_event_status( false, xui::event::KEY_MOUSE_LEFT_CLICK );
 
-                            draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
-                                .moveto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.5f } )
-                                .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.3f } )
-                                .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.7f } )
-                                .closepath();
+                            if ( status == xui::event_status::ACTIVE )
+                                value = std::clamp( value + ( dir == xui::direction::LEFT_RIGHT ? -step : step ), min, max );
+
+                            draw_style_status( status, [&]()
+                            {
+                                draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+
+                                draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                                    .moveto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.5f } )
+                                    .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.3f } )
+                                    .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.7f } )
+                                    .closepath();
+                            } );
                         } );
                     } );
 
                     // right
-                    arrow_rect = { back_rect.x + back_rect.w - arrow_radius, back_rect.y, arrow_radius, arrow_radius };
-                    draw_viewport( arrow_rect, [&]()
+                    draw_control_id( std::format( "{}-{}-{}", ctl_id, "arrow", "right" ), [&]()
                     {
-                        status = current_event_status();
-
-                        if ( status == xui::event_status::ACTIVE )
-                            value = std::clamp( value + ( dir == xui::direction::RIGHT_LEFT ? -step : step ), min, max );
-
-                        draw_style_status( status, [&]()
+                        arrow_rect = { back_rect.x + back_rect.w - arrow_radius, back_rect.y, arrow_radius, arrow_radius };
+                        draw_viewport( arrow_rect, [&]()
                         {
-                            draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                            status = current_event_status( false, xui::event::KEY_MOUSE_LEFT_CLICK );
 
-                            draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
-                                .moveto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.5f } )
-                                .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.3f } )
-                                .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.7f } )
-                                .closepath();
+                            if ( status == xui::event_status::ACTIVE )
+                                value = std::clamp( value + ( dir == xui::direction::RIGHT_LEFT ? -step : step ), min, max );
+
+                            draw_style_status( status, [&]()
+                            {
+                                draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+
+                                draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                                    .moveto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.5f } )
+                                    .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.3f } )
+                                    .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.7f } )
+                                    .closepath();
+                            } );
                         } );
                     } );
                     break;
                 case xui::direction::TOP_BOTTOM:
                 case xui::direction::BOTTOM_TOP:
                     // up
-                    arrow_rect = { back_rect.x, back_rect.y, arrow_radius, arrow_radius };
-                    draw_viewport( arrow_rect, [&]()
+                    draw_control_id( std::format( "{}-{}-{}", ctl_id, "arrow", "up" ), [&]()
                     {
-                        status = current_event_status();
-
-                        if ( status == xui::event_status::ACTIVE )
-                            value = std::clamp( value + ( dir == xui::direction::TOP_BOTTOM ? -step : step ), min, max );
-
-                        draw_style_status( status, [&]()
+                        arrow_rect = { back_rect.x, back_rect.y, arrow_radius, arrow_radius };
+                        draw_viewport( arrow_rect, [&]()
                         {
-                            draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                            status = current_event_status( false, xui::event::KEY_MOUSE_LEFT_CLICK );
 
-                            draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
-                                .moveto( { arrow_rect.x + arrow_rect.w * 0.5f, arrow_rect.y + arrow_rect.h * 0.3f } )
-                                .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.7f } )
-                                .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.7f } )
-                                .closepath();
+                            if ( status == xui::event_status::ACTIVE )
+                                value = std::clamp( value + ( dir == xui::direction::TOP_BOTTOM ? -step : step ), min, max );
+
+                            draw_style_status( status, [&]()
+                            {
+                                draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+
+                                draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                                    .moveto( { arrow_rect.x + arrow_rect.w * 0.5f, arrow_rect.y + arrow_rect.h * 0.3f } )
+                                    .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.7f } )
+                                    .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.7f } )
+                                    .closepath();
+                            } );
                         } );
                     } );
 
                     // down
-                    arrow_rect = { back_rect.x, back_rect.y + back_rect.h - arrow_radius, arrow_radius, arrow_radius };
-                    draw_viewport( arrow_rect, [&]()
+                    draw_control_id( std::format( "{}-{}-{}", ctl_id, "arrow", "down" ), [&]()
                     {
-                        status = current_event_status();
-
-                        if ( status == xui::event_status::ACTIVE )
-                            value = std::clamp( value + ( dir == xui::direction::BOTTOM_TOP ? -step : step ), min, max );
-
-                        draw_style_status( status, [&]()
+                        arrow_rect = { back_rect.x, back_rect.y + back_rect.h - arrow_radius, arrow_radius, arrow_radius };
+                        draw_viewport( arrow_rect, [&]()
                         {
-                            draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+                            status = current_event_status( false, xui::event::KEY_MOUSE_LEFT_CLICK );
 
-                            draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
-                                .moveto( { arrow_rect.x + arrow_rect.w * 0.5f, arrow_rect.y + arrow_rect.h * 0.7f } )
-                                .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.3f } )
-                                .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.3f } )
-                                .closepath();
+                            if ( status == xui::event_status::ACTIVE )
+                                value = std::clamp( value + ( dir == xui::direction::BOTTOM_TOP ? -step : step ), min, max );
+
+                            draw_style_status( status, [&]()
+                            {
+                                draw_rect( arrow_rect, current_style( "border", xui::border() ), current_style( "filled", xui::filled() ) );
+
+                                draw_path( current_style( "stroke", xui::stroke() ), current_style( "filled", xui::filled() ) )
+                                    .moveto( { arrow_rect.x + arrow_rect.w * 0.5f, arrow_rect.y + arrow_rect.h * 0.7f } )
+                                    .lineto( { arrow_rect.x + arrow_rect.w * 0.3f, arrow_rect.y + arrow_rect.h * 0.3f } )
+                                    .lineto( { arrow_rect.x + arrow_rect.w * 0.7f, arrow_rect.y + arrow_rect.h * 0.3f } )
+                                    .closepath();
+                            } );
                         } );
                     } );
                     break;
